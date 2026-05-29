@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="타임박스">
+<meta name="theme-color" content="#1a1a1a">
+<link rel="manifest" href="manifest.json">
+<title>타임박스 플래너</title>
+<style>
+  :root {
+    --bg: #f0ece4;
+    --card: #faf8f4;
+    --accent: #1a1a1a;
+    --border: #ddd8d0;
+    --pink:   #f4a7b9;
+    --green:  #7ecfa0;
+    --yellow: #f7df6e;
+    --blue:   #89c4e1;
+    --purple: #c39bd3;
+    --orange: #f0a070;
+    --row-h: 34px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:var(--bg); font-family:-apple-system,'Nanum Gothic',sans-serif; }
+
+  /* ── 헤더 ── */
+  .header {
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    background:var(--accent);
+    padding: calc(var(--safe-top) + 10px) 14px 10px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .header-title { color:#fff; font-size:15px; font-weight:700; letter-spacing:.5px; }
+  .header-right { display:flex; align-items:center; gap:8px; }
+  .header-date { color:#aaa; font-size:12px; }
+  .hdr-btn {
+    background:rgba(255,255,255,.15); border:none; color:#fff;
+    width:28px; height:28px; border-radius:50%; font-size:14px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+
+  /* ── 날짜 바 ── */
+  .date-bar {
+    position:fixed; z-index:40;
+    background:#fff; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:0;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    padding:0 10px;
+    box-shadow:0 1px 4px rgba(0,0,0,.07);
+  }
+  .date-bar::-webkit-scrollbar { display:none; }
+  .date-nav-btn {
+    background:none; border:none; font-size:18px; color:#888;
+    padding:0 6px; cursor:pointer; flex-shrink:0; line-height:1;
+  }
+  .day-chip {
+    display:flex; flex-direction:column; align-items:center;
+    padding:5px 8px; border-radius:10px; cursor:pointer; flex-shrink:0;
+    font-size:9px; color:#888; gap:1px; margin:4px 2px;
+  }
+  .day-num { font-size:13px; font-weight:700; color:var(--accent); }
+  .day-chip.selected { background:var(--accent); color:#fff; }
+  .day-chip.selected .day-num { color:#fff; }
+  .day-chip.today:not(.selected) { background:#f0ede8; }
+
+  /* ── 메인 레이아웃 ── */
+  .main {
+    position:fixed; left:0; right:0; bottom:0;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    display:flex; flex-direction:column;
+  }
+  /* 헤더+날짜바 높이는 JS로 계산해서 top 설정 */
+
+  /* ── 노트북 컨테이너 ── */
+  .notebook {
+    display:flex; gap:0;
+    background:var(--card);
+    margin:10px 10px calc(var(--safe-bot) + 10px);
+    border-radius:12px;
+    box-shadow:0 2px 12px rgba(0,0,0,.12);
+    overflow:hidden;
+    min-height:calc(100% - 20px);
+  }
+
+  /* ── 왼쪽 패널 ── */
+  .left-panel {
+    width:42%; border-right:1.5px solid var(--border);
+    display:flex; flex-direction:column;
+    flex-shrink:0;
+  }
+
+  /* ── 섹션 헤더 ── */
+  .sec-hdr {
+    background:var(--accent); color:#fff;
+    font-size:9px; font-weight:700; letter-spacing:.8px;
+    padding:5px 8px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .sec-hdr button {
+    background:rgba(255,255,255,.2); border:none; color:#fff;
+    font-size:9px; padding:2px 7px; border-radius:20px; cursor:pointer;
+  }
+
+  /* ── Priorities ── */
+  .priority-item {
+    display:flex; align-items:center; gap:6px;
+    padding:6px 8px; border-bottom:1px solid var(--border);
+  }
+  .p-num {
+    width:18px; height:18px; border-radius:50%;
+    background:var(--accent); color:#fff;
+    font-size:10px; font-weight:700; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .p-input {
+    flex:1; border:none; outline:none; font-size:11px;
+    font-family:inherit; background:transparent; color:#333; min-width:0;
+  }
+  .p-input::placeholder { color:#ccc; }
+  .p-check {
+    width:18px; height:18px; border:1.5px solid #ddd; border-radius:50%;
+    cursor:pointer; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:10px;
+    transition:all .2s;
+  }
+  .p-check.done { background:var(--green); border-color:var(--green); color:#fff; }
+
+  /* ── Brain Dump ── */
+  .dump-scroll { flex:1; overflow-y:auto; }
+  .dump-item {
+    display:flex; align-items:center; gap:6px;
+    padding:6px 8px; border-bottom:1px solid #f0ede8;
+  }
+  .dump-cb {
+    width:16px; height:16px; border:1.5px solid #ccc; border-radius:4px;
+    cursor:pointer; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:9px;
+    transition:all .2s;
+  }
+  .dump-cb.done { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .dump-text {
+    flex:1; border:none; outline:none; font-size:11px;
+    font-family:inherit; background:transparent; color:#333; min-width:0;
+  }
+  .dump-text.done { text-decoration:line-through; color:#bbb; }
+  .dump-del {
+    font-size:14px; color:#ddd; cursor:pointer;
+    border:none; background:none; flex-shrink:0; padding:0 2px;
+  }
+  .add-dump {
+    display:flex; align-items:center; gap:5px;
+    padding:7px 8px; color:#bbb; font-size:11px;
+    cursor:pointer; border:none; background:none; width:100%;
+  }
+  .add-dump-icon { font-size:14px; }
+
+  /* ── 오른쪽: TimeBox ── */
+  .right-panel { flex:1; display:flex; flex-direction:column; min-width:0; }
+
+  /* 30min 눈금 표시 */
+  .tb-scale {
+    display:flex; justify-content:flex-end;
+    padding:3px 8px 1px; font-size:8px; color:#bbb;
+    border-bottom:1px solid var(--border);
+  }
+
+  .time-grid { flex:1; }
+  .tb-row {
+    display:flex; align-items:stretch;
+    border-bottom:1px solid #ede9e2;
+    height:var(--row-h); position:relative;
+  }
+  .tb-row:nth-child(even) { background:#f7f5f1; }
+  .tb-lbl {
+    width:30px; flex-shrink:0;
+    font-size:9px; color:#999;
+    display:flex; align-items:center; justify-content:flex-end;
+    padding-right:5px; border-right:1px solid var(--border);
+  }
+  .tb-lbl.period { font-size:7.5px; color:#ccc; }
+  .tb-content { flex:1; position:relative; cursor:pointer; }
+  /* 30분 점선 */
+  .tb-content::after {
+    content:''; position:absolute;
+    top:50%; left:0; right:0; height:1px;
+    border-top:1px dashed #e8e4dc; pointer-events:none;
+  }
+  .tb-block {
+    position:absolute; top:2px; bottom:2px; left:3px; right:3px;
+    border-radius:5px; opacity:.82;
+    display:flex; align-items:center; padding:0 7px;
+    font-size:10px; font-weight:600; cursor:pointer; z-index:1;
+    transition:opacity .15s; white-space:nowrap; overflow:hidden;
+  }
+  .tb-block:active { opacity:.5; }
+  .tb-block.done { text-decoration:line-through; opacity:.4; }
+  .c-pink   { background:var(--pink); }
+  .c-green  { background:var(--green); }
+  .c-yellow { background:var(--yellow); }
+  .c-blue   { background:var(--blue); }
+  .c-purple { background:var(--purple); }
+  .c-orange { background:var(--orange); }
+
+  /* ── 모달 ── */
+  .overlay {
+    display:none; position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,.5); align-items:flex-end;
+  }
+  .overlay.open { display:flex; }
+  .sheet {
+    background:#fff; border-radius:20px 20px 0 0;
+    width:100%; padding:16px 18px calc(var(--safe-bot) + 16px);
+    animation:up .22s ease;
+  }
+  @keyframes up { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .sheet-handle {
+    width:32px; height:4px; background:#e0e0e0;
+    border-radius:2px; margin:0 auto 14px;
+  }
+  .sheet-title { font-size:14px; font-weight:700; color:var(--accent); margin-bottom:12px; }
+  .sheet-input {
+    width:100%; border:1.5px solid var(--border); border-radius:10px;
+    padding:10px 13px; font-size:14px; outline:none; font-family:inherit;
+    margin-bottom:10px; color:#333;
+  }
+  .sheet-input:focus { border-color:var(--accent); }
+  .color-row { display:flex; gap:8px; margin-bottom:14px; }
+  .color-chip {
+    width:30px; height:30px; border-radius:50%; cursor:pointer;
+    border:3px solid transparent; transition:border-color .15s; flex-shrink:0;
+  }
+  .color-chip.sel { border-color:var(--accent); }
+  .sheet-btns { display:flex; gap:8px; }
+  .btn-cancel {
+    flex:1; padding:12px; border:1.5px solid var(--border); border-radius:11px;
+    font-size:13px; font-weight:600; color:#888; background:none; cursor:pointer;
+  }
+  .btn-del {
+    padding:12px 14px; background:#fff0f0; border:none; border-radius:11px;
+    font-size:13px; font-weight:600; color:#e55; cursor:pointer;
+  }
+  .btn-save {
+    flex:2; padding:12px; background:var(--accent); border:none; border-radius:11px;
+    font-size:13px; font-weight:700; color:#fff; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="header" id="header">
+  <div class="header-title">📅 타임박스 플래너</div>
+  <div class="header-right">
+    <span class="header-date" id="hdr-date"></span>
+  </div>
+</div>
+
+<!-- 날짜 바 -->
+<div class="date-bar" id="date-bar">
+  <button class="date-nav-btn" onclick="changeWeek(-1)">‹</button>
+  <div id="day-chips" style="display:flex;"></div>
+  <button class="date-nav-btn" onclick="changeWeek(1)">›</button>
+</div>
+
+<!-- 메인 스크롤 -->
+<div class="main" id="main">
+  <div class="notebook">
+
+    <!-- 왼쪽 패널 -->
+    <div class="left-panel">
+      <!-- Top 4 Priorities -->
+      <div class="sec-hdr">⭐ TOP 4 PRIORITIES</div>
+      <div id="priority-list"></div>
+
+      <!-- Brain Dump -->
+      <div class="sec-hdr">
+        🧠 BRAIN DUMP
+        <button onclick="addDump()">+ 추가</button>
+      </div>
+      <div class="dump-scroll" id="dump-list"></div>
+    </div>
+
+    <!-- 오른쪽 패널: TimeBox -->
+    <div class="right-panel">
+      <div class="sec-hdr">⏱ TIME BOX</div>
+      <div class="tb-scale">30min ·</div>
+      <div class="time-grid" id="time-grid"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 블록 모달 -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="sheet-title">타임블록 추가</div>
+    <input class="sheet-input" id="block-input" placeholder="할 일 입력..." maxlength="24">
+    <div style="font-size:10px;color:#aaa;margin-bottom:7px;">색상</div>
+    <div class="color-row" id="color-row"></div>
+    <div class="sheet-btns">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-del" id="btn-del" onclick="deleteBlock()" style="display:none">삭제</button>
+      <button class="btn-save" onclick="saveBlock()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 상수 ──────────────────────────────────
+const COLORS = ['pink','green','yellow','blue','purple','orange'];
+const DAYS_KO = ['일','월','화','수','목','금','토'];
+const HOURS = [
+  {l:'4',p:'AM'},{l:'5'},{l:'6'},{l:'7'},{l:'8'},{l:'9'},
+  {l:'10'},{l:'11'},{l:'12'},
+  {l:'1',p:'PM'},{l:'2'},{l:'3'},{l:'4'},{l:'5'},
+  {l:'6'},{l:'7'},{l:'8'},{l:'9'},{l:'10'},{l:'11'},
+  {l:'12'},{l:'1',p:'↑AM'},{l:'2'},{l:'3'},
+];
+
+// ── 상태 ──────────────────────────────────
+let selDate = toKey(new Date());
+let weekStart = getMonday(new Date());
+let editHour = null;
+let selColor = 'pink';
+
+// ── 유틸 ──────────────────────────────────
+function toKey(d){ return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`; }
+function p2(n){ return String(n).padStart(2,'0'); }
+function getMonday(d){
+  const day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1);
+  const m=new Date(d); m.setDate(diff); return m;
+}
+function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+function load(k,def){ try{return JSON.parse(localStorage.getItem(k))??def;}catch{return def;} }
+function save(k,v){ localStorage.setItem(k,JSON.stringify(v)); }
+function dayData(key){ return load('tbp2_'+key,{priorities:['','','',''],dumps:[],blocks:{}}); }
+function saveDay(key,d){ save('tbp2_'+key,d); }
+
+// ── 레이아웃 오프셋 ──────────────────────
+function fixLayout(){
+  const hH = document.getElementById('header').offsetHeight;
+  const dH = document.getElementById('date-bar').offsetHeight;
+  document.getElementById('date-bar').style.top = hH+'px';
+  document.getElementById('main').style.top = (hH+dH)+'px';
+}
+
+// ── 날짜 바 ──────────────────────────────
+function renderDayChips(){
+  const today = toKey(new Date());
+  const container = document.getElementById('day-chips');
+  container.innerHTML='';
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i), key=toKey(d);
+    const chip=document.createElement('div');
+    chip.className='day-chip'+(key===selDate?' selected':(key===today?' today':''));
+    chip.innerHTML=`<span>${DAYS_KO[d.getDay()]}</span><span class="day-num">${d.getDate()}</span>`;
+    chip.onclick=()=>{ selDate=key; renderAll(); };
+    container.appendChild(chip);
+  }
+  const d=new Date(selDate+'T00:00:00');
+  document.getElementById('hdr-date').textContent=
+    `${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())} (${DAYS_KO[d.getDay()]})`;
+}
+function changeWeek(dir){ weekStart=addDays(weekStart,dir*7); renderAll(); }
+
+// ── Priorities ───────────────────────────
+function renderPriorities(){
+  const data=dayData(selDate);
+  const list=document.getElementById('priority-list');
+  list.innerHTML='';
+  for(let i=0;i<4;i++){
+    const done=data.priorities[i]&&data.priorities[i].startsWith('✓');
+    const text=done?data.priorities[i].slice(1):(data.priorities[i]||'');
+    const row=document.createElement('div');
+    row.className='priority-item';
+    row.innerHTML=`
+      <div class="p-num">${i+1}</div>
+      <input class="p-input" placeholder="${['오늘의 첫 목표','두 번째 중요한 일','세 번째 할 일','네 번째 할 일'][i]}" value="${text}" data-i="${i}">
+      <div class="p-check${done?' done':''}" data-i="${i}">${done?'✓':''}</div>`;
+    row.querySelector('.p-input').addEventListener('input',function(){
+      const d=dayData(selDate);
+      const isDone=d.priorities[this.dataset.i]?.startsWith('✓');
+      d.priorities[this.dataset.i]=isDone?'✓'+this.value:this.value;
+      saveDay(selDate,d);
+    });
+    row.querySelector('.p-check').addEventListener('click',function(){
+      const d=dayData(selDate), idx=+this.dataset.i;
+      const cur=d.priorities[idx]||'';
+      d.priorities[idx]=cur.startsWith('✓')?cur.slice(1):'✓'+cur;
+      saveDay(selDate,d); renderPriorities();
+    });
+    list.appendChild(row);
+  }
+}
+
+// ── Brain Dump ────────────────────────────
+function renderDumps(){
+  const data=dayData(selDate);
+  const list=document.getElementById('dump-list');
+  list.innerHTML='';
+  (data.dumps||[]).forEach((item,i)=>{
+    const row=document.createElement('div');
+    row.className='dump-item';
+    row.innerHTML=`
+      <div class="dump-cb${item.done?' done':''}" data-i="${i}">${item.done?'✓':''}</div>
+      <input class="dump-text${item.done?' done':''}" value="${item.text}" data-i="${i}" placeholder="할 일...">
+      <button class="dump-del" data-i="${i}">×</button>`;
+    row.querySelector('.dump-cb').addEventListener('click',function(){
+      const d=dayData(selDate); d.dumps[+this.dataset.i].done=!d.dumps[+this.dataset.i].done;
+      saveDay(selDate,d); renderDumps();
+    });
+    row.querySelector('.dump-text').addEventListener('input',function(){
+      const d=dayData(selDate); d.dumps[+this.dataset.i].text=this.value; saveDay(selDate,d);
+    });
+    row.querySelector('.dump-del').addEventListener('click',function(){
+      const d=dayData(selDate); d.dumps.splice(+this.dataset.i,1); saveDay(selDate,d); renderDumps();
+    });
+    list.appendChild(row);
+  });
+  // + 추가 버튼
+  const addBtn=document.createElement('button');
+  addBtn.className='add-dump';
+  addBtn.innerHTML='<span class="add-dump-icon">＋</span> 항목 추가';
+  addBtn.onclick=addDump;
+  list.appendChild(addBtn);
+}
+function addDump(){
+  const d=dayData(selDate);
+  d.dumps=d.dumps||[];
+  d.dumps.push({text:'',done:false});
+  saveDay(selDate,d); renderDumps();
+  setTimeout(()=>{
+    const inputs=document.querySelectorAll('.dump-text');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  },50);
+}
+
+// ── TimeBox ───────────────────────────────
+function renderTimebox(){
+  const data=dayData(selDate);
+  const grid=document.getElementById('time-grid');
+  grid.innerHTML='';
+  HOURS.forEach((h,idx)=>{
+    const row=document.createElement('div');
+    row.className='tb-row';
+    const lbl=document.createElement('div');
+    lbl.className='tb-lbl'+(h.p?' period':'');
+    lbl.textContent=h.p?`${h.l} ${h.p}`:h.l;
+    const content=document.createElement('div');
+    content.className='tb-content';
+    const block=(data.blocks||{})[idx];
+    if(block){
+      const el=document.createElement('div');
+      el.className=`tb-block c-${block.color}${block.done?' done':''}`;
+      el.textContent=block.label;
+      el.onclick=(e)=>{ e.stopPropagation(); openModal(idx,block); };
+      content.appendChild(el);
+    } else {
+      content.onclick=()=>openModal(idx,null);
+    }
+    row.appendChild(lbl); row.appendChild(content);
+    grid.appendChild(row);
+  });
+}
+
+// ── 모달 ──────────────────────────────────
+function openModal(hourIdx, existing){
+  editHour=hourIdx;
+  selColor=existing?existing.color:'pink';
+  document.getElementById('block-input').value=existing?existing.label:'';
+  document.getElementById('sheet-title').textContent=
+    existing?'타임블록 수정':`타임블록 추가 (${HOURS[hourIdx].l}시)`;
+  document.getElementById('btn-del').style.display=existing?'block':'none';
+  renderColorRow();
+  document.getElementById('overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('block-input').focus(),100);
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); editHour=null; }
+function overlayClick(e){ if(e.target===document.getElementById('overlay')) closeModal(); }
+function renderColorRow(){
+  const row=document.getElementById('color-row');
+  row.innerHTML='';
+  COLORS.forEach(c=>{
+    const chip=document.createElement('div');
+    chip.className=`color-chip c-${c}${c===selColor?' sel':''}`;
+    chip.onclick=()=>{ selColor=c; renderColorRow(); };
+    row.appendChild(chip);
+  });
+}
+function saveBlock(){
+  const label=document.getElementById('block-input').value.trim();
+  if(!label){ closeModal(); return; }
+  const d=dayData(selDate);
+  d.blocks=d.blocks||{};
+  d.blocks[editHour]={label,color:selColor,done:false};
+  saveDay(selDate,d); closeModal(); renderTimebox();
+}
+function deleteBlock(){
+  const d=dayData(selDate);
+  delete d.blocks[editHour];
+  saveDay(selDate,d); closeModal(); renderTimebox();
+}
+
+// ── 전체 렌더 ─────────────────────────────
+function renderAll(){
+  renderDayChips();
+  renderPriorities();
+  renderDumps();
+  renderTimebox();
+  fixLayout();
+}
+
+window.addEventListener('resize', fixLayout);
+renderAll();
+</script>
+</body>
+</html>
