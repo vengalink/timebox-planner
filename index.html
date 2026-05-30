@@ -26,16 +26,27 @@
 
   /* 날짜 바 */
   .date-bar{position:fixed;z-index:40;background:#fff;border-bottom:1px solid var(--border);
-    display:flex;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;
-    scrollbar-width:none;padding:0 10px;box-shadow:0 1px 4px rgba(0,0,0,.07);}
-  .date-bar::-webkit-scrollbar{display:none;}
-  .date-nav-btn{background:none;border:none;font-size:18px;color:#888;padding:0 8px;cursor:pointer;flex-shrink:0;}
-  .day-chip{display:flex;flex-direction:column;align-items:center;padding:5px 10px;border-radius:10px;
-    cursor:pointer;flex-shrink:0;font-size:9px;color:#888;gap:1px;margin:4px 2px;}
-  .day-num{font-size:14px;font-weight:700;color:var(--accent);}
-  .day-chip.selected{background:var(--accent);color:#fff;}
-  .day-chip.selected .day-num{color:#fff;}
+    box-shadow:0 1px 4px rgba(0,0,0,.07);padding:6px 4px 4px;}
+  /* 요일 헤더 */
+  .dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px;}
+  .dow-label{text-align:center;font-size:9px;color:#bbb;font-weight:600;}
+  /* 3주 그리드 */
+  .week-grid{display:flex;flex-direction:column;gap:2px;}
+  .week-row{display:grid;grid-template-columns:repeat(7,1fr);}
+  .day-chip{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:3px 2px;border-radius:8px;cursor:pointer;
+    font-size:8px;color:#bbb;gap:1px;}
+  .day-chip.cur-week{color:#888;}
+  .day-num{font-size:13px;font-weight:700;color:#ccc;}
+  .day-chip.cur-week .day-num{color:var(--accent);}
+  .day-chip.selected{background:var(--accent)!important;color:#fff!important;}
+  .day-chip.selected .day-num{color:#fff!important;}
   .day-chip.today:not(.selected){background:#f0ede8;}
+  .day-chip.today:not(.selected) .day-num{color:var(--accent);}
+  /* 주 이동 화살표 */
+  .date-nav-row{display:flex;justify-content:space-between;align-items:center;padding:0 4px 4px;}
+  .date-nav-btn{background:none;border:none;font-size:16px;color:#aaa;padding:0 6px;cursor:pointer;}
+  .date-range-label{font-size:10px;color:#aaa;}
 
   /* 완료율 */
   .progress-wrap{position:fixed;z-index:39;background:#fff;border-bottom:1px solid var(--border);
@@ -159,9 +170,16 @@
 </div>
 
 <div class="date-bar" id="date-bar">
-  <button class="date-nav-btn" onclick="changeWeek(-1)">‹</button>
-  <div id="day-chips" style="display:flex;"></div>
-  <button class="date-nav-btn" onclick="changeWeek(1)">›</button>
+  <div class="dow-row">
+    <div class="dow-label">월</div><div class="dow-label">화</div><div class="dow-label">수</div>
+    <div class="dow-label">목</div><div class="dow-label">금</div><div class="dow-label">토</div><div class="dow-label">일</div>
+  </div>
+  <div class="week-grid" id="week-grid"></div>
+  <div class="date-nav-row">
+    <button class="date-nav-btn" onclick="changeWeek(-1)">‹ 이전</button>
+    <span class="date-range-label" id="date-range-label"></span>
+    <button class="date-nav-btn" onclick="changeWeek(1)">다음 ›</button>
+  </div>
 </div>
 
 <div class="progress-wrap" id="progress-wrap">
@@ -272,17 +290,37 @@ function fixLayout(){
   document.getElementById('main').style.top=(hH+dH+pH)+'px';
 }
 
-/* 날짜 바 */
+/* 날짜 바 - 3주 그리드 */
 function renderDayChips(){
-  const today=toKey(new Date()),c=document.getElementById('day-chips');
-  c.innerHTML='';
-  for(let i=0;i<7;i++){
-    const d=addDays(weekStart,i),key=toKey(d),chip=document.createElement('div');
-    chip.className='day-chip'+(key===selDate?' selected':(key===today?' today':''));
-    chip.innerHTML='<span>'+DAYS_KO[d.getDay()]+'</span><span class="day-num">'+d.getDate()+'</span>';
-    chip.onclick=()=>{selDate=key;renderAll();};
-    c.appendChild(chip);
+  const today=toKey(new Date());
+  const grid=document.getElementById('week-grid');
+  grid.innerHTML='';
+
+  // weekStart 기준으로 이전주(-7), 현재주(0), 다음주(+7) 3줄
+  for(let w=-1;w<=1;w++){
+    const row=document.createElement('div');
+    row.className='week-row';
+    for(let i=0;i<7;i++){
+      const d=addDays(weekStart, w*7+i);
+      const key=toKey(d);
+      const chip=document.createElement('div');
+      let cls='day-chip'+(w===0?' cur-week':'');
+      if(key===selDate) cls+=' selected';
+      else if(key===today) cls+=' today';
+      chip.className=cls;
+      chip.innerHTML='<span class="day-num">'+d.getDate()+'</span>';
+      chip.onclick=()=>{selDate=key;renderAll();};
+      row.appendChild(chip);
+    }
+    grid.appendChild(row);
   }
+
+  // 날짜 범위 레이블
+  const s=addDays(weekStart,-7), e=addDays(weekStart,13);
+  document.getElementById('date-range-label').textContent=
+    p2(s.getMonth()+1)+'/'+p2(s.getDate())+' – '+p2(e.getMonth()+1)+'/'+p2(e.getDate());
+
+  // 헤더 날짜
   const d=new Date(selDate+'T00:00:00');
   document.getElementById('hdr-date').textContent=
     d.getFullYear()+'.'+p2(d.getMonth()+1)+'.'+p2(d.getDate())+' ('+DAYS_KO[d.getDay()]+')';
