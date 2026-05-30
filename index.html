@@ -65,39 +65,45 @@
     font-size:11px;font-weight:700;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
   .p-input{flex:1;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent;color:#333;min-width:0;}
   .p-input::placeholder{color:#ccc;}
+  .p-cat-badge{font-size:9px;color:#aaa;flex-shrink:0;padding:0 2px;}
   .p-time{width:58px;flex-shrink:0;border:1.5px solid var(--border);border-radius:8px;
     padding:4px 5px;font-size:12px;text-align:center;outline:none;font-family:inherit;color:#555;background:#fff;}
   .p-time::placeholder{color:#ccc;font-size:10px;}
   .p-time:focus{border-color:var(--accent);}
-  /* TOP4 → BrainDump 내리기 버튼 */
-  .p-demote{font-size:13px;cursor:pointer;border:none;background:none;
-    flex-shrink:0;color:#bbb;padding:0 1px;transition:color .15s;}
+  .p-demote{font-size:13px;cursor:pointer;border:none;background:none;flex-shrink:0;color:#bbb;padding:0 1px;}
   .p-demote:active{color:#e07070;}
   .p-check{width:20px;height:20px;border:1.5px solid #ddd;border-radius:50%;cursor:pointer;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .2s;}
   .p-check.done{background:var(--green);border-color:var(--green);color:#fff;}
 
-  /* BRAIN DUMP 3칸 */
-  .dump-grid{display:grid;grid-template-columns:1fr 1fr 1fr;}
-  .dump-col{display:flex;flex-direction:column;border-right:1px solid var(--border);}
-  .dump-col:last-child{border-right:none;}
-  .dump-col-hdr{padding:5px 0;text-align:center;font-size:9px;font-weight:700;
-    letter-spacing:.6px;color:#888;border-bottom:1px solid var(--border);background:#f5f2ed;}
+  /* BRAIN DUMP 2x2 */
+  .dump-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;}
+  .dump-col{display:flex;flex-direction:column;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+  .dump-col:nth-child(2){border-right:none;}
+  .dump-col:nth-child(3){border-bottom:none;}
+  .dump-col:nth-child(4){border-right:none;border-bottom:none;}
+  .dump-col-hdr{padding:6px 0;text-align:center;font-size:10px;font-weight:700;
+    letter-spacing:.8px;color:#fff;border-bottom:1px solid var(--border);}
+  /* 각 칸 헤더 색상 */
+  .dump-col:nth-child(1) .dump-col-hdr{background:#3a3a3a;}
+  .dump-col:nth-child(2) .dump-col-hdr{background:#4a6fa5;}
+  .dump-col:nth-child(3) .dump-col-hdr{background:#5a8a6a;}
+  .dump-col:nth-child(4) .dump-col-hdr{background:#8a5a7a;}
+
   .dump-items{flex:1;}
-  .dump-item{display:flex;align-items:center;gap:4px;padding:6px 6px;
-    border-bottom:1px solid #f0ede8;}
+  .dump-item{display:flex;align-items:center;gap:4px;padding:5px 7px;border-bottom:1px solid #f0ede8;}
   .dump-item:last-child{border-bottom:none;}
   .dump-cb{width:15px;height:15px;border:1.5px solid #ccc;border-radius:4px;cursor:pointer;
     flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;transition:all .2s;}
   .dump-cb.done{background:var(--accent);border-color:var(--accent);color:#fff;}
-  .dump-text{flex:1;border:none;outline:none;font-size:11px;font-family:inherit;
+  .dump-text{flex:1;border:none;outline:none;font-size:12px;font-family:inherit;
     background:transparent;color:#333;min-width:0;}
   .dump-text::placeholder{color:#ddd;}
   .dump-text.done{text-decoration:line-through;color:#bbb;}
   .dump-promote{font-size:11px;cursor:pointer;border:none;background:none;
-    flex-shrink:0;padding:0;opacity:.35;transition:opacity .15s;}
+    flex-shrink:0;padding:0;opacity:.3;transition:opacity .15s;}
   .dump-promote:active{opacity:1;}
-  .dump-add{width:100%;padding:6px;font-size:10px;color:#bbb;border:none;
+  .dump-add{width:100%;padding:5px;font-size:11px;color:#bbb;border:none;
     background:none;cursor:pointer;text-align:center;}
 
   /* 전일 미완료 */
@@ -108,17 +114,9 @@
     padding:7px 12px 7px 20px;border-bottom:1px solid #f5ede8;background:#fffaf9;}
   .yesterday-item:last-child{border-bottom:none;}
   .y-text{flex:1;font-size:12px;color:#999;min-width:0;}
-  .y-cat{font-size:9px;color:#bbb;flex-shrink:0;}
+  .y-cat{font-size:9px;color:#bbb;flex-shrink:0;background:#f0ede8;padding:1px 5px;border-radius:4px;}
   .y-move{font-size:10px;color:#e07070;border:1px solid #f4a7a7;
     border-radius:5px;padding:2px 7px;cursor:pointer;background:none;flex-shrink:0;}
-
-  /* 회고 */
-  .review-body{padding:10px 12px;}
-  .review-textarea{width:100%;height:52px;border:1.5px solid var(--border);border-radius:10px;
-    padding:8px 12px;font-size:13px;line-height:1.6;resize:none;font-family:inherit;
-    color:#333;background:#fff;outline:none;transition:border-color .2s;}
-  .review-textarea:focus{border-color:var(--accent);}
-  .review-textarea::placeholder{color:#ccc;}
 
   /* 카테고리 선택 시트 */
   .cat-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);align-items:flex-end;}
@@ -126,9 +124,9 @@
   .cat-sheet{background:#fff;border-radius:20px 20px 0 0;width:100%;
     padding:16px 20px calc(var(--safe-bot)+16px);}
   .cat-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;text-align:center;}
-  .cat-btns{display:flex;gap:10px;}
-  .cat-btn{flex:1;padding:13px;border:1.5px solid var(--border);border-radius:12px;
-    font-size:13px;font-weight:700;cursor:pointer;background:#fff;color:var(--accent);}
+  .cat-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .cat-btn{padding:13px;border:1.5px solid var(--border);border-radius:12px;
+    font-size:13px;font-weight:700;cursor:pointer;background:#fff;color:var(--accent);text-align:center;}
   .cat-btn:active{background:var(--accent);color:#fff;}
   .cat-cancel{width:100%;margin-top:10px;padding:12px;border:none;border-radius:12px;
     font-size:13px;color:#888;background:#f0ede8;cursor:pointer;}
@@ -162,21 +160,26 @@
       <div id="priority-list"></div>
     </div>
 
-    <!-- BRAIN DUMP -->
+    <!-- BRAIN DUMP 2x2 -->
     <div class="card">
       <div class="sec-hdr">🧠 BRAIN DUMP</div>
       <div class="dump-grid">
-        <div class="dump-col" id="col-MY">
+        <div class="dump-col">
+          <div class="dump-col-hdr">NEW</div>
+          <div class="dump-items" id="items-NEW"></div>
+          <button class="dump-add" onclick="addDump('NEW')">＋</button>
+        </div>
+        <div class="dump-col">
           <div class="dump-col-hdr">MY</div>
           <div class="dump-items" id="items-MY"></div>
           <button class="dump-add" onclick="addDump('MY')">＋</button>
         </div>
-        <div class="dump-col" id="col-FAMILY">
+        <div class="dump-col">
           <div class="dump-col-hdr">FAMILY</div>
           <div class="dump-items" id="items-FAMILY"></div>
           <button class="dump-add" onclick="addDump('FAMILY')">＋</button>
         </div>
-        <div class="dump-col" id="col-BUSINESS">
+        <div class="dump-col">
           <div class="dump-col-hdr">BUSINESS</div>
           <div class="dump-items" id="items-BUSINESS"></div>
           <button class="dump-add" onclick="addDump('BUSINESS')">＋</button>
@@ -185,22 +188,15 @@
       <div id="yesterday-section"></div>
     </div>
 
-    <!-- 회고 -->
-    <div class="card">
-      <div class="sec-hdr">✍️ 오늘의 회고</div>
-      <div class="review-body">
-        <textarea class="review-textarea" id="review-text" placeholder="오늘 잘한 점, 아쉬운 점, 내일 다짐..."></textarea>
-      </div>
-    </div>
-
   </div>
 </div>
 
-<!-- 카테고리 선택 시트 (TOP4 → Brain Dump 내릴 때) -->
+<!-- 카테고리 선택 시트 -->
 <div class="cat-overlay" id="cat-overlay" onclick="if(event.target===this)closeCatSheet()">
   <div class="cat-sheet">
     <div class="cat-title">어느 칸으로 내릴까요?</div>
     <div class="cat-btns">
+      <button class="cat-btn" onclick="confirmDemote('NEW')">NEW</button>
       <button class="cat-btn" onclick="confirmDemote('MY')">MY</button>
       <button class="cat-btn" onclick="confirmDemote('FAMILY')">FAMILY</button>
       <button class="cat-btn" onclick="confirmDemote('BUSINESS')">BUSINESS</button>
@@ -211,8 +207,8 @@
 
 <script>
 const DAYS_KO=['일','월','화','수','목','금','토'];
-const CATS=['MY','FAMILY','BUSINESS'];
-const DEFAULT_DUMPS=6;
+const CATS=['NEW','MY','FAMILY','BUSINESS'];
+const DEFAULT_DUMPS=5;
 let selDate=toKey(new Date()), weekStart=getMonday(new Date());
 let dragSrcIdx=null, demotePIdx=null;
 
@@ -225,27 +221,23 @@ function save(k,v){localStorage.setItem(k,JSON.stringify(v));}
 
 function makeDefaultDumps(){
   const obj={};
-  CATS.forEach(c=>{
-    obj[c]=Array.from({length:DEFAULT_DUMPS},()=>({text:'',done:false}));
-  });
+  CATS.forEach(c=>{obj[c]=Array.from({length:DEFAULT_DUMPS},()=>({text:'',done:false}));});
   return obj;
 }
-
 function dayData(key){
-  return load('tbp5_'+key,{
+  return load('tbp6_'+key,{
     priorities:[
       {text:'',time:'',done:false,cat:''},{text:'',time:'',done:false,cat:''},
       {text:'',time:'',done:false,cat:''},{text:'',time:'',done:false,cat:''}
     ],
-    dumps: makeDefaultDumps(),
-    review:''
+    dumps:makeDefaultDumps()
   });
 }
-function saveDay(key,d){save('tbp5_'+key,d);}
+function saveDay(key,d){save('tbp6_'+key,d);}
 function getPrevKey(key){const d=new Date(key+'T00:00:00');d.setDate(d.getDate()-1);return toKey(d);}
 function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-// 레이아웃
+/* 레이아웃 */
 function fixLayout(){
   const hH=document.getElementById('header').offsetHeight;
   const dH=document.getElementById('date-bar').offsetHeight;
@@ -255,7 +247,7 @@ function fixLayout(){
   document.getElementById('main').style.top=(hH+dH+pH)+'px';
 }
 
-// 날짜 바
+/* 날짜 바 */
 function renderDayChips(){
   const today=toKey(new Date()),c=document.getElementById('day-chips');
   c.innerHTML='';
@@ -272,20 +264,19 @@ function renderDayChips(){
 }
 function changeWeek(dir){weekStart=addDays(weekStart,dir*7);renderAll();}
 
-// 완료율
+/* 완료율 */
 function updateProgress(){
   const data=dayData(selDate);
-  const pItems=data.priorities.filter(p=>p.text.trim());
-  let allItems=[...pItems];
-  CATS.forEach(c=>(data.dumps[c]||[]).filter(d=>d.text.trim()).forEach(d=>allItems.push(d)));
-  const done=allItems.filter(x=>x.done).length;
-  const total=allItems.length;
+  let all=[];
+  data.priorities.filter(p=>p.text.trim()).forEach(p=>all.push(p));
+  CATS.forEach(c=>(data.dumps[c]||[]).filter(d=>d.text.trim()).forEach(d=>all.push(d)));
+  const done=all.filter(x=>x.done).length, total=all.length;
   const pct=total?Math.round(done/total*100):0;
   document.getElementById('prog-fill').style.width=pct+'%';
   document.getElementById('prog-pct').textContent=done+'/'+total+' ('+pct+'%)';
 }
 
-// TOP 4
+/* TOP 4 */
 function renderPriorities(){
   const data=dayData(selDate),list=document.getElementById('priority-list');
   list.innerHTML='';
@@ -296,12 +287,11 @@ function renderPriorities(){
       '<span class="drag-handle">⠿</span>'+
       '<div class="p-num">'+(i+1)+'</div>'+
       '<input class="p-input" placeholder="'+['오늘의 첫 목표','두 번째 중요한 일','세 번째 할 일','네 번째 할 일'][i]+'" value="'+escHtml(p.text||'')+'" data-i="'+i+'">'+
-      (p.text.trim()?'<span class="p-cat-badge" style="font-size:9px;color:#aaa;flex-shrink:0;padding:0 2px;">'+(p.cat||'')+'</span>':'')+
+      (p.cat?'<span class="p-cat-badge">'+p.cat+'</span>':'')+
       '<input class="p-time" placeholder="시간" value="'+escHtml(p.time||'')+'" data-i="'+i+'">'+
-      '<button class="p-demote" data-i="'+i+'" title="Brain Dump으로 내리기">↓</button>'+
+      '<button class="p-demote" data-i="'+i+'" title="Brain Dump으로">↓</button>'+
       '<div class="p-check'+(p.done?' done':'')+'" data-i="'+i+'">'+(p.done?'✓':'')+'</div>';
 
-    // 드래그 (PC)
     row.addEventListener('dragstart',e=>{dragSrcIdx=i;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
     row.addEventListener('dragend',()=>{row.classList.remove('dragging');document.querySelectorAll('.priority-item').forEach(r=>r.classList.remove('drag-over'));});
     row.addEventListener('dragover',e=>{e.preventDefault();row.classList.add('drag-over');});
@@ -314,17 +304,14 @@ function renderPriorities(){
       d.priorities.splice(i,0,moved);
       saveDay(selDate,d);renderPriorities();updateProgress();
     });
-
-    // 터치 드래그 (iOS)
     let touchStartY=0;
     row.addEventListener('touchstart',e=>{touchStartY=e.touches[0].clientY;dragSrcIdx=i;},{passive:true});
     row.addEventListener('touchmove',e=>{
       const dy=e.touches[0].clientY-touchStartY;
-      row.style.transform='translateY('+dy+'px)';
-      row.style.zIndex='100'; row.style.position='relative';
+      row.style.transform='translateY('+dy+'px)';row.style.zIndex='100';row.style.position='relative';
     },{passive:true});
     row.addEventListener('touchend',e=>{
-      row.style.transform=''; row.style.zIndex=''; row.style.position='';
+      row.style.transform='';row.style.zIndex='';row.style.position='';
       const touch=e.changedTouches[0];
       const el=document.elementFromPoint(touch.clientX,touch.clientY);
       const targetRow=el?.closest('.priority-item');
@@ -344,13 +331,10 @@ function renderPriorities(){
     row.querySelector('.p-time').addEventListener('input',function(){
       const d=dayData(selDate);d.priorities[+this.dataset.i].time=this.value;saveDay(selDate,d);
     });
-    // ↓ Brain Dump으로 내리기
     row.querySelector('.p-demote').addEventListener('click',function(){
-      const d=dayData(selDate);
-      const idx=+this.dataset.i;
+      const d=dayData(selDate),idx=+this.dataset.i;
       if(!d.priorities[idx].text.trim())return;
       demotePIdx=idx;
-      // 원래 카테고리가 있으면 바로 이동, 없으면 선택 시트
       const cat=d.priorities[idx].cat;
       if(cat&&CATS.includes(cat)) confirmDemote(cat);
       else openCatSheet();
@@ -364,40 +348,34 @@ function renderPriorities(){
   });
 }
 
-// 카테고리 선택 시트
+/* 카테고리 시트 */
 function openCatSheet(){document.getElementById('cat-overlay').classList.add('open');}
 function closeCatSheet(){document.getElementById('cat-overlay').classList.remove('open');demotePIdx=null;}
 function confirmDemote(cat){
   if(demotePIdx===null){closeCatSheet();return;}
-  const d=dayData(selDate);
-  const p=d.priorities[demotePIdx];
+  const d=dayData(selDate),p=d.priorities[demotePIdx];
   if(!p.text.trim()){closeCatSheet();return;}
-  // Brain Dump 빈 슬롯에 넣거나 추가
   const slot=(d.dumps[cat]||[]).findIndex(item=>!item.text.trim());
   if(slot>=0) d.dumps[cat][slot]={text:p.text,done:false};
   else d.dumps[cat].push({text:p.text,done:false});
-  // 우선순위 슬롯 비우기
   d.priorities[demotePIdx]={text:'',time:'',done:false,cat:''};
-  saveDay(selDate,d);
-  closeCatSheet();
+  saveDay(selDate,d);closeCatSheet();
   renderPriorities();renderDumps();updateProgress();
 }
 
-// BRAIN DUMP
+/* BRAIN DUMP */
 function renderDumps(){
   const data=dayData(selDate);
   CATS.forEach(cat=>{
     const container=document.getElementById('items-'+cat);
     container.innerHTML='';
-    const items=data.dumps[cat]||[];
-    items.forEach((item,i)=>{
+    (data.dumps[cat]||[]).forEach((item,i)=>{
       const row=document.createElement('div');
       row.className='dump-item';
       row.innerHTML=
         '<div class="dump-cb'+(item.done?' done':'')+'" data-cat="'+cat+'" data-i="'+i+'">'+(item.done?'✓':'')+'</div>'+
         '<input class="dump-text'+(item.done?' done':'')+'" value="'+escHtml(item.text)+'" data-cat="'+cat+'" data-i="'+i+'" placeholder="할 일...">'+
-        '<button class="dump-promote" data-cat="'+cat+'" data-i="'+i+'" title="TOP 4로 승격">⭐</button>';
-
+        '<button class="dump-promote" data-cat="'+cat+'" data-i="'+i+'" title="TOP 4로">⭐</button>';
       row.querySelector('.dump-cb').addEventListener('click',function(){
         const d=dayData(selDate);
         d.dumps[this.dataset.cat][+this.dataset.i].done=!d.dumps[this.dataset.cat][+this.dataset.i].done;
@@ -408,15 +386,13 @@ function renderDumps(){
         d.dumps[this.dataset.cat][+this.dataset.i].text=this.value;saveDay(selDate,d);updateProgress();
       });
       row.querySelector('.dump-promote').addEventListener('click',function(){
-        const d=dayData(selDate);
-        const cat=this.dataset.cat, idx=+this.dataset.i;
+        const d=dayData(selDate),cat=this.dataset.cat,idx=+this.dataset.i;
         const text=d.dumps[cat][idx].text.trim();
         if(!text)return;
         const slot=d.priorities.findIndex(p=>!p.text.trim());
         if(slot<0){alert('TOP 4가 모두 채워져 있습니다.');return;}
         d.priorities[slot]={text,time:'',done:false,cat};
         d.dumps[cat].splice(idx,1);
-        // 빈 줄 유지 (최소 6개)
         while(d.dumps[cat].length<DEFAULT_DUMPS) d.dumps[cat].push({text:'',done:false});
         saveDay(selDate,d);renderPriorities();renderDumps();updateProgress();
       });
@@ -437,12 +413,11 @@ function addDump(cat){
   },50);
 }
 
-// 전일 미완료
+/* 전일 미완료 */
 function renderYesterday(){
   const sec=document.getElementById('yesterday-section');
   sec.innerHTML='';
-  const prevKey=getPrevKey(selDate);
-  const prevData=dayData(prevKey);
+  const prevKey=getPrevKey(selDate),prevData=dayData(prevKey);
   let undone=[];
   CATS.forEach(cat=>(prevData.dumps[cat]||[]).filter(i=>!i.done&&i.text.trim()).forEach(i=>undone.push({...i,cat})));
   if(!undone.length)return;
@@ -457,14 +432,12 @@ function renderYesterday(){
     const row=document.createElement('div');
     row.className='yesterday-item';
     row.innerHTML=
-      '<span class="y-cat">['+item.cat+']</span>'+
+      '<span class="y-cat">'+item.cat+'</span>'+
       '<span class="y-text">'+escHtml(item.text)+'</span>'+
-      '<button class="y-move" data-text="'+escHtml(item.text)+'" data-cat="'+item.cat+'">오늘로 이동</button>';
+      '<button class="y-move" data-text="'+escHtml(item.text)+'" data-cat="'+item.cat+'">오늘로</button>';
     row.querySelector('.y-move').addEventListener('click',function(){
-      const d=dayData(selDate);
-      const cat=this.dataset.cat;
+      const d=dayData(selDate),cat=this.dataset.cat;
       d.dumps[cat]=d.dumps[cat]||[];
-      // 빈 슬롯에 넣기
       const slot=d.dumps[cat].findIndex(i=>!i.text.trim());
       if(slot>=0) d.dumps[cat][slot]={text:this.dataset.text,done:false};
       else d.dumps[cat].push({text:this.dataset.text,done:false});
@@ -479,19 +452,9 @@ function renderYesterday(){
   sec.appendChild(wrap);
 }
 
-// 회고
-function renderReview(){
-  document.getElementById('review-text').value=dayData(selDate).review||'';
-}
-document.addEventListener('input',e=>{
-  if(e.target.id==='review-text'){
-    const d=dayData(selDate);d.review=e.target.value;saveDay(selDate,d);
-  }
-});
-
-// 전체 렌더
+/* 전체 렌더 */
 function renderAll(){
-  renderDayChips();renderPriorities();renderDumps();renderReview();updateProgress();fixLayout();
+  renderDayChips();renderPriorities();renderDumps();updateProgress();fixLayout();
 }
 window.addEventListener('resize',fixLayout);
 renderAll();
