@@ -91,11 +91,16 @@
   .dump-col:nth-child(4) .dump-col-hdr{background:#8a5a7a;}
 
   .dump-items{flex:1;}
-  .dump-item{display:flex;align-items:center;gap:4px;padding:5px 7px;border-bottom:1px solid #f0ede8;}
+  .dump-item{display:flex;align-items:center;gap:4px;padding:5px 7px;border-bottom:1px solid #f0ede8;
+    border-left:3px solid transparent;transition:border-left-color .2s;}
   .dump-item:last-child{border-bottom:none;}
   .dump-cb{width:15px;height:15px;border:1.5px solid #ccc;border-radius:4px;cursor:pointer;
     flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;transition:all .2s;}
   .dump-cb.done{background:var(--accent);border-color:var(--accent);color:#fff;}
+  /* 컬러 도트 */
+  .dump-color-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;cursor:pointer;
+    border:1.5px solid #ddd;background:#fff;transition:transform .15s;}
+  .dump-color-dot:active{transform:scale(1.3);}
   .dump-text{flex:1;border:none;outline:none;font-size:12px;font-family:inherit;
     background:transparent;color:#333;min-width:0;}
   .dump-text::placeholder{color:#ddd;}
@@ -105,6 +110,20 @@
   .dump-promote:active{opacity:1;}
   .dump-add{width:100%;padding:5px;font-size:11px;color:#bbb;border:none;
     background:none;cursor:pointer;text-align:center;}
+
+  /* 컬러 픽커 팝업 */
+  .color-picker-overlay{display:none;position:fixed;inset:0;z-index:300;}
+  .color-picker-overlay.open{display:block;}
+  .color-picker-popup{position:fixed;z-index:301;background:#fff;border-radius:14px;
+    padding:10px;box-shadow:0 4px 20px rgba(0,0,0,.2);
+    display:flex;flex-wrap:wrap;gap:8px;width:180px;}
+  .cp-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;
+    transition:transform .15s,border-color .15s;}
+  .cp-swatch:active{transform:scale(1.2);}
+  .cp-swatch.selected{border-color:var(--accent);}
+  .cp-clear{width:28px;height:28px;border-radius:50%;cursor:pointer;border:1.5px solid #ddd;
+    background:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;color:#bbb;}
+  .cp-clear:active{background:#f0ede8;}
 
   /* 전일 미완료 */
   .yesterday-wrap{border-top:1px solid var(--border);}
@@ -191,6 +210,10 @@
   </div>
 </div>
 
+<!-- 컬러 픽커 -->
+<div class="color-picker-overlay" id="cp-overlay" onclick="closeColorPicker()"></div>
+<div class="color-picker-popup" id="cp-popup"></div>
+
 <!-- 카테고리 선택 시트 -->
 <div class="cat-overlay" id="cat-overlay" onclick="if(event.target===this)closeCatSheet()">
   <div class="cat-sheet">
@@ -209,8 +232,10 @@
 const DAYS_KO=['일','월','화','수','목','금','토'];
 const CATS=['NEW','MY','FAMILY','BUSINESS'];
 const DEFAULT_DUMPS=5;
+const COLORS=['#f4a7b9','#f7df6e','#7ecfa0','#89c4e1','#c39bd3','#f0a070','#a8d8a8','#f9c6c6','#b5d5f5','#d4b5f5'];
 let selDate=toKey(new Date()), weekStart=getMonday(new Date());
 let dragSrcIdx=null, demotePIdx=null;
+let cpCat=null, cpIdx=null;
 
 function toKey(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
 function p2(n){return String(n).padStart(2,'0');}
@@ -363,6 +388,48 @@ function confirmDemote(cat){
   renderPriorities();renderDumps();updateProgress();
 }
 
+/* 컬러 픽커 */
+function openColorPicker(cat, idx, dotEl){
+  cpCat=cat; cpIdx=idx;
+  const data=dayData(selDate);
+  const curColor=(data.dumps[cat][idx]||{}).color||'';
+  const popup=document.getElementById('cp-popup');
+  popup.innerHTML='';
+  COLORS.forEach(c=>{
+    const sw=document.createElement('div');
+    sw.className='cp-swatch'+(c===curColor?' selected':'');
+    sw.style.background=c;
+    sw.onclick=e=>{e.stopPropagation();applyColor(c);};
+    popup.appendChild(sw);
+  });
+  const clr=document.createElement('div');
+  clr.className='cp-clear'; clr.textContent='✕';
+  clr.onclick=e=>{e.stopPropagation();applyColor('');};
+  popup.appendChild(clr);
+  // 위치 계산
+  const rect=dotEl.getBoundingClientRect();
+  const pw=180, ph=90;
+  let left=rect.left, top=rect.bottom+6;
+  if(left+pw>window.innerWidth) left=window.innerWidth-pw-8;
+  if(top+ph>window.innerHeight) top=rect.top-ph-6;
+  popup.style.left=left+'px'; popup.style.top=top+'px';
+  document.getElementById('cp-overlay').classList.add('open');
+  popup.style.display='flex';
+}
+function applyColor(color){
+  const d=dayData(selDate);
+  if(d.dumps[cpCat]&&d.dumps[cpCat][cpIdx]!==undefined){
+    d.dumps[cpCat][cpIdx].color=color;
+    saveDay(selDate,d);
+  }
+  closeColorPicker(); renderDumps();
+}
+function closeColorPicker(){
+  document.getElementById('cp-overlay').classList.remove('open');
+  document.getElementById('cp-popup').style.display='none';
+  cpCat=null; cpIdx=null;
+}
+
 /* BRAIN DUMP */
 function renderDumps(){
   const data=dayData(selDate);
@@ -372,10 +439,19 @@ function renderDumps(){
     (data.dumps[cat]||[]).forEach((item,i)=>{
       const row=document.createElement('div');
       row.className='dump-item';
+      const color=item.color||'';
+      if(color) row.style.borderLeftColor=color;
+      const bg=color?color+'22':'';
+      if(bg) row.style.background=bg;
       row.innerHTML=
+        '<div class="dump-color-dot" data-cat="'+cat+'" data-i="'+i+'" style="'+(color?'background:'+color+';border-color:'+color+';':'')+'"></div>'+
         '<div class="dump-cb'+(item.done?' done':'')+'" data-cat="'+cat+'" data-i="'+i+'">'+(item.done?'✓':'')+'</div>'+
         '<input class="dump-text'+(item.done?' done':'')+'" value="'+escHtml(item.text)+'" data-cat="'+cat+'" data-i="'+i+'" placeholder="할 일...">'+
         '<button class="dump-promote" data-cat="'+cat+'" data-i="'+i+'" title="TOP 4로">⭐</button>';
+      row.querySelector('.dump-color-dot').addEventListener('click',function(e){
+        e.stopPropagation();
+        openColorPicker(this.dataset.cat, +this.dataset.i, this);
+      });
       row.querySelector('.dump-cb').addEventListener('click',function(){
         const d=dayData(selDate);
         d.dumps[this.dataset.cat][+this.dataset.i].done=!d.dumps[this.dataset.cat][+this.dataset.i].done;
