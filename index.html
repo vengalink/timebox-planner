@@ -25,36 +25,29 @@
   .header-date{color:#aaa;font-size:12px;}
 
   /* 날짜 바 */
-  .date-bar{position:fixed;z-index:40;background:#fff;border-bottom:1px solid var(--border);
+  .date-bar{position:fixed;left:0;right:0;z-index:40;background:#fff;border-bottom:1px solid var(--border);
     box-shadow:0 1px 4px rgba(0,0,0,.07);padding:6px 4px 4px;}
   /* 요일 헤더 */
   .dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px;}
-  .dow-label{text-align:center;font-size:9px;color:#bbb;font-weight:600;}
+  .dow-label{text-align:center;font-size:10px;color:#bbb;font-weight:700;padding:4px 0;}
   /* 3주 그리드 */
   .week-grid{display:flex;flex-direction:column;gap:2px;}
   .week-row{display:grid;grid-template-columns:repeat(7,1fr);}
   .day-chip{display:flex;flex-direction:column;align-items:center;justify-content:center;
-    padding:3px 2px;border-radius:8px;cursor:pointer;
-    font-size:8px;color:#bbb;gap:1px;}
+    padding:8px 0;border-radius:10px;cursor:pointer;
+    font-size:9px;color:#bbb;gap:2px;width:100%;}
   .day-chip.cur-week{color:#888;}
-  .day-num{font-size:13px;font-weight:700;color:#ccc;}
+  .day-num{font-size:17px;font-weight:700;color:#ccc;}
   .day-chip.cur-week .day-num{color:var(--accent);}
   .day-chip.selected{background:var(--accent)!important;color:#fff!important;}
   .day-chip.selected .day-num{color:#fff!important;}
   .day-chip.today:not(.selected){background:#f0ede8;}
   .day-chip.today:not(.selected) .day-num{color:var(--accent);}
   /* 주 이동 화살표 */
-  .date-nav-row{display:flex;justify-content:space-between;align-items:center;padding:0 4px 4px;}
+  .date-nav-row{display:flex;justify-content:space-between;align-items:center;padding:2px 4px 4px;}
   .date-nav-btn{background:none;border:none;font-size:16px;color:#aaa;padding:0 6px;cursor:pointer;}
   .date-range-label{font-size:10px;color:#aaa;}
 
-  /* 완료율 */
-  .progress-wrap{position:fixed;z-index:39;background:#fff;border-bottom:1px solid var(--border);
-    padding:7px 16px;display:flex;align-items:center;gap:10px;}
-  .progress-label{font-size:11px;color:#888;flex-shrink:0;}
-  .progress-bar-bg{flex:1;background:#ede9e2;border-radius:99px;height:7px;}
-  .progress-bar-fill{height:7px;border-radius:99px;background:var(--accent);transition:width .4s;}
-  .progress-pct{font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0;min-width:60px;text-align:right;}
 
   /* 메인 */
   .main{position:fixed;left:0;right:0;bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
@@ -127,7 +120,7 @@
   .color-picker-overlay.open{display:block;}
   .color-picker-popup{position:fixed;z-index:301;background:#fff;border-radius:14px;
     padding:10px;box-shadow:0 4px 20px rgba(0,0,0,.2);
-    display:flex;flex-wrap:wrap;gap:8px;width:180px;}
+    display:none;flex-wrap:wrap;gap:8px;width:180px;}
   .cp-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;
     transition:transform .15s,border-color .15s;}
   .cp-swatch:active{transform:scale(1.2);}
@@ -182,11 +175,6 @@
   </div>
 </div>
 
-<div class="progress-wrap" id="progress-wrap">
-  <span class="progress-label">오늘 달성률</span>
-  <div class="progress-bar-bg"><div class="progress-bar-fill" id="prog-fill" style="width:0%"></div></div>
-  <span class="progress-pct" id="prog-pct">0/0 (0%)</span>
-</div>
 
 <div class="main" id="main">
   <div class="content">
@@ -284,10 +272,8 @@ function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').
 function fixLayout(){
   const hH=document.getElementById('header').offsetHeight;
   const dH=document.getElementById('date-bar').offsetHeight;
-  const pH=document.getElementById('progress-wrap').offsetHeight;
   document.getElementById('date-bar').style.top=hH+'px';
-  document.getElementById('progress-wrap').style.top=(hH+dH)+'px';
-  document.getElementById('main').style.top=(hH+dH+pH)+'px';
+  document.getElementById('main').style.top=(hH+dH)+'px';
 }
 
 /* 날짜 바 - 3주 그리드 */
