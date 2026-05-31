@@ -26,16 +26,16 @@
 
   /* 날짜 바 */
   .date-bar{position:fixed;left:0;right:0;z-index:40;background:#fff;border-bottom:1px solid var(--border);
-    box-shadow:0 1px 4px rgba(0,0,0,.07);padding:6px 4px 4px;}
+    box-shadow:0 1px 4px rgba(0,0,0,.07);padding:10px 4px 6px;}
   /* 요일 헤더 */
-  .dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px;}
-  .dow-label{text-align:center;font-size:10px;color:#bbb;font-weight:700;padding:4px 0;}
+  .dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
+  .dow-label{text-align:center;font-size:10px;color:#bbb;font-weight:700;padding:2px 0;}
   /* 3주 그리드 */
   .week-grid{display:flex;flex-direction:column;gap:2px;}
   .week-row{display:grid;grid-template-columns:repeat(7,1fr);}
   .day-chip{display:flex;flex-direction:column;align-items:center;justify-content:center;
-    padding:8px 0;border-radius:10px;cursor:pointer;
-    font-size:9px;color:#bbb;gap:2px;width:100%;}
+    padding:4px 0;border-radius:10px;cursor:pointer;
+    font-size:9px;color:#bbb;gap:1px;width:100%;}
   .day-chip.cur-week{color:#888;}
   .day-num{font-size:17px;font-weight:700;color:#ccc;}
   .day-chip.cur-week .day-num{color:var(--accent);}
