@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="타임박스">
+<meta name="apple-mobile-web-app-title" content="Timebox">
 <meta name="theme-color" content="#1a1a1a">
 <link rel="manifest" href="manifest.json">
-<title>타임박스 플래너</title>
+<title>Timebox Planner</title>
 <style>
   :root {
     --bg:#f0ece4; --card:#faf8f4; --accent:#1a1a1a; --border:#ddd8d0;
@@ -158,21 +158,16 @@
 <body>
 
 <div class="header" id="header">
-  <div class="header-title">📅 타임박스 플래너</div>
+  <div class="header-title">📅 Timebox Planner</div>
   <div class="header-date" id="hdr-date"></div>
 </div>
 
 <div class="date-bar" id="date-bar">
   <div class="dow-row">
-    <div class="dow-label">월</div><div class="dow-label">화</div><div class="dow-label">수</div>
-    <div class="dow-label">목</div><div class="dow-label">금</div><div class="dow-label">토</div><div class="dow-label">일</div>
+    <div class="dow-label">MON</div><div class="dow-label">TUE</div><div class="dow-label">WED</div>
+    <div class="dow-label">THU</div><div class="dow-label">FRI</div><div class="dow-label">SAT</div><div class="dow-label">SUN</div>
   </div>
   <div class="week-grid" id="week-grid"></div>
-  <div class="date-nav-row">
-    <button class="date-nav-btn" onclick="changeWeek(-1)">‹ 이전</button>
-    <span class="date-range-label" id="date-range-label"></span>
-    <button class="date-nav-btn" onclick="changeWeek(1)">다음 ›</button>
-  </div>
 </div>
 
 
@@ -181,13 +176,14 @@
 
     <!-- TOP 4 -->
     <div class="card">
-      <div class="sec-hdr">⭐ TOP 4 PRIORITIES</div>
+      <div class="sec-hdr">⭐ TOP 4 PRIORITIES <span id="top4-date" style="font-size:9px;opacity:.6;font-weight:400;letter-spacing:0;"></span></div>
       <div id="priority-list"></div>
     </div>
 
     <!-- BRAIN DUMP 2x2 -->
     <div class="card">
       <div class="sec-hdr">🧠 BRAIN DUMP</div>
+
       <div class="dump-grid">
         <div class="dump-col">
           <div class="dump-col-hdr">NEW</div>
@@ -223,23 +219,23 @@
 <!-- 카테고리 선택 시트 -->
 <div class="cat-overlay" id="cat-overlay" onclick="if(event.target===this)closeCatSheet()">
   <div class="cat-sheet">
-    <div class="cat-title">어느 칸으로 내릴까요?</div>
+    <div class="cat-title">Move to which column?</div>
     <div class="cat-btns">
       <button class="cat-btn" onclick="confirmDemote('NEW')">NEW</button>
       <button class="cat-btn" onclick="confirmDemote('MY')">MY</button>
       <button class="cat-btn" onclick="confirmDemote('FAMILY')">FAMILY</button>
       <button class="cat-btn" onclick="confirmDemote('BUSINESS')">BUSINESS</button>
     </div>
-    <button class="cat-cancel" onclick="closeCatSheet()">취소</button>
+    <button class="cat-cancel" onclick="closeCatSheet()">Cancel</button>
   </div>
 </div>
 
 <script>
-const DAYS_KO=['일','월','화','수','목','금','토'];
+const DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const CATS=['NEW','MY','FAMILY','BUSINESS'];
 const DEFAULT_DUMPS=5;
 const COLORS=['#f4a7b9','#f7df6e','#7ecfa0','#89c4e1','#c39bd3','#f0a070','#a8d8a8','#f9c6c6','#b5d5f5','#d4b5f5'];
-let selDate=toKey(new Date()), weekStart=getMonday(new Date());
+let selDate=toKey(new Date());
 let dragSrcIdx=null, demotePIdx=null;
 let cpCat=null, cpIdx=null;
 
@@ -276,18 +272,18 @@ function fixLayout(){
   document.getElementById('main').style.top=(hH+dH)+'px';
 }
 
-/* 날짜 바 - 3주 그리드 */
+/* 날짜 바 - 오늘 기준 고정 3주 */
 function renderDayChips(){
   const today=toKey(new Date());
+  const todayMonday=getMonday(new Date()); // 항상 오늘이 속한 주 기준
   const grid=document.getElementById('week-grid');
   grid.innerHTML='';
 
-  // weekStart 기준으로 이전주(-7), 현재주(0), 다음주(+7) 3줄
   for(let w=-1;w<=1;w++){
     const row=document.createElement('div');
     row.className='week-row';
     for(let i=0;i<7;i++){
-      const d=addDays(weekStart, w*7+i);
+      const d=addDays(todayMonday, w*7+i);
       const key=toKey(d);
       const chip=document.createElement('div');
       let cls='day-chip'+(w===0?' cur-week':'');
@@ -301,17 +297,10 @@ function renderDayChips(){
     grid.appendChild(row);
   }
 
-  // 날짜 범위 레이블
-  const s=addDays(weekStart,-7), e=addDays(weekStart,13);
-  document.getElementById('date-range-label').textContent=
-    p2(s.getMonth()+1)+'/'+p2(s.getDate())+' – '+p2(e.getMonth()+1)+'/'+p2(e.getDate());
-
-  // 헤더 날짜
   const d=new Date(selDate+'T00:00:00');
   document.getElementById('hdr-date').textContent=
-    d.getFullYear()+'.'+p2(d.getMonth()+1)+'.'+p2(d.getDate())+' ('+DAYS_KO[d.getDay()]+')';
+    DAYS_EN[d.getDay()]+', '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();
 }
-function changeWeek(dir){weekStart=addDays(weekStart,dir*7);renderAll();}
 
 /* 완료율 */
 function updateProgress(){
@@ -335,10 +324,10 @@ function renderPriorities(){
     row.innerHTML=
       '<span class="drag-handle">⠿</span>'+
       '<div class="p-num">'+(i+1)+'</div>'+
-      '<input class="p-input" placeholder="'+['오늘의 첫 목표','두 번째 중요한 일','세 번째 할 일','네 번째 할 일'][i]+'" value="'+escHtml(p.text||'')+'" data-i="'+i+'">'+
+      '<input class="p-input" placeholder="'+['First priority','Second priority','Third priority','Fourth priority'][i]+'" value="'+escHtml(p.text||'')+'" data-i="'+i+'">'+
       (p.cat?'<span class="p-cat-badge">'+p.cat+'</span>':'')+
-      '<input class="p-time" placeholder="시간" value="'+escHtml(p.time||'')+'" data-i="'+i+'">'+
-      '<button class="p-demote" data-i="'+i+'" title="Brain Dump으로">↓</button>'+
+      '<input class="p-time" placeholder="Time" value="'+escHtml(p.time||'')+'" data-i="'+i+'">'+
+      '<button class="p-demote" data-i="'+i+'" title="Move to Brain Dump">↓</button>'+
       '<div class="p-check'+(p.done?' done':'')+'" data-i="'+i+'">'+(p.done?'✓':'')+'</div>';
 
     row.addEventListener('dragstart',e=>{dragSrcIdx=i;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
@@ -470,8 +459,8 @@ function renderDumps(){
       row.innerHTML=
         '<div class="dump-color-dot" data-cat="'+cat+'" data-i="'+i+'" style="'+(color?'background:'+color+';border-color:'+color+';':'')+'"></div>'+
         '<div class="dump-cb'+(item.done?' done':'')+'" data-cat="'+cat+'" data-i="'+i+'">'+(item.done?'✓':'')+'</div>'+
-        '<input class="dump-text'+(item.done?' done':'')+'" value="'+escHtml(item.text)+'" data-cat="'+cat+'" data-i="'+i+'" placeholder="할 일...">'+
-        '<button class="dump-promote" data-cat="'+cat+'" data-i="'+i+'" title="TOP 4로">⭐</button>';
+        '<input class="dump-text'+(item.done?' done':'')+'" value="'+escHtml(item.text)+'" data-cat="'+cat+'" data-i="'+i+'" placeholder="Task...">'+
+        '<button class="dump-promote" data-cat="'+cat+'" data-i="'+i+'" title="Promote to TOP 4">⭐</button>';
       row.querySelector('.dump-color-dot').addEventListener('click',function(e){
         e.stopPropagation();
         openColorPicker(this.dataset.cat, +this.dataset.i, this);
@@ -490,7 +479,7 @@ function renderDumps(){
         const text=d.dumps[cat][idx].text.trim();
         if(!text)return;
         const slot=d.priorities.findIndex(p=>!p.text.trim());
-        if(slot<0){alert('TOP 4가 모두 채워져 있습니다.');return;}
+        if(slot<0){alert('All TOP 4 slots are filled.');return;}
         d.priorities[slot]={text,time:'',done:false,cat};
         d.dumps[cat].splice(idx,1);
         while(d.dumps[cat].length<DEFAULT_DUMPS) d.dumps[cat].push({text:'',done:false});
@@ -526,7 +515,7 @@ function renderYesterday(){
   wrap.className='yesterday-wrap';
   const hdr=document.createElement('div');
   hdr.className='yesterday-hdr';
-  hdr.textContent='⚠ 전일 미완료 ('+p2(prevDate.getMonth()+1)+'/'+p2(prevDate.getDate())+')';
+  hdr.textContent='⚠ Yesterday unfinished ('+p2(prevDate.getMonth()+1)+'/'+p2(prevDate.getDate())+')';
   wrap.appendChild(hdr);
   undone.forEach(item=>{
     const row=document.createElement('div');
@@ -534,7 +523,7 @@ function renderYesterday(){
     row.innerHTML=
       '<span class="y-cat">'+item.cat+'</span>'+
       '<span class="y-text">'+escHtml(item.text)+'</span>'+
-      '<button class="y-move" data-text="'+escHtml(item.text)+'" data-cat="'+item.cat+'">오늘로</button>';
+      '<button class="y-move" data-text="'+escHtml(item.text)+'" data-cat="'+item.cat+'">+ Today</button>';
     row.querySelector('.y-move').addEventListener('click',function(){
       const d=dayData(selDate),cat=this.dataset.cat;
       d.dumps[cat]=d.dumps[cat]||[];

@@ -1,7 +1,7 @@
 {
-  "name": "타임박스 플래너",
-  "short_name": "타임박스",
-  "description": "브레인덤프 + 타임박스 플래너",
+  "name": "Timebox Planner",
+  "short_name": "Timebox",
+  "description": "Brain dump + Timebox planner",
   "start_url": "/timebox-planner/",
   "scope": "/timebox-planner/",
   "display": "standalone",

@@ -1,4 +1,4 @@
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = 'timebox-' + VERSION;
 const FILES = ['./', './index.html', './manifest.json'];
 
