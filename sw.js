@@ -1,6 +1,6 @@
-const VERSION = 'v15';
+const VERSION = 'v16';
 const CACHE = 'timebox-' + VERSION;
-const FILES = ['./', './index.html', './manifest.json'];
+const FILES = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
