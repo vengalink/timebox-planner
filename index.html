@@ -37,6 +37,7 @@
   /* 요일 헤더 */
   .dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
   .dow-label{text-align:center;font-size:10px;color:#bbb;font-weight:700;padding:2px 0;}
+  .dow-label.sun{color:#e05a4f;}
   /* 3주 그리드 */
   .week-grid{display:flex;flex-direction:column;gap:2px;}
   .week-row{display:grid;grid-template-columns:repeat(7,1fr);}
@@ -50,6 +51,7 @@
   .day-chip.selected .day-num{color:#fff!important;}
   .day-chip.today:not(.selected){background:#f0ede8;}
   .day-chip.today:not(.selected) .day-num{color:var(--accent);}
+  .day-chip.sun:not(.selected) .day-num{color:#e05a4f;}
   /* 주 이동 화살표 */
   .date-nav-row{display:flex;justify-content:space-between;align-items:center;padding:2px 4px 4px;}
   .date-nav-btn{background:none;border:none;font-size:16px;color:#aaa;padding:0 6px;cursor:pointer;}
@@ -173,8 +175,8 @@
 
 <div class="date-bar" id="date-bar">
   <div class="dow-row">
-    <div class="dow-label">MON</div><div class="dow-label">TUE</div><div class="dow-label">WED</div>
-    <div class="dow-label">THU</div><div class="dow-label">FRI</div><div class="dow-label">SAT</div><div class="dow-label">SUN</div>
+    <div class="dow-label sun">SUN</div><div class="dow-label">MON</div><div class="dow-label">TUE</div>
+    <div class="dow-label">WED</div><div class="dow-label">THU</div><div class="dow-label">FRI</div><div class="dow-label">SAT</div>
   </div>
   <div class="week-grid" id="week-grid"></div>
 </div>
@@ -252,7 +254,7 @@ let cpCat=null, cpIdx=null;
 
 function toKey(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
 function p2(n){return String(n).padStart(2,'0');}
-function getMonday(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d);m.setDate(diff);return m;}
+function getSunday(d){const m=new Date(d);m.setDate(d.getDate()-d.getDay());m.setHours(0,0,0,0);return m;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function load(k,def){try{return JSON.parse(localStorage.getItem(k))??def;}catch{return def;}}
 function save(k,v){localStorage.setItem(k,JSON.stringify(v));}
@@ -281,7 +283,7 @@ function fixLayout(){}
 /* 날짜 바 - 오늘 기준 고정 3주 */
 function renderDayChips(){
   const today=toKey(new Date());
-  const todayMonday=getMonday(new Date()); // 항상 오늘이 속한 주 기준
+  const weekSun=getSunday(new Date()); // 오늘이 속한 주의 일요일(주 시작)
   const grid=document.getElementById('week-grid');
   grid.innerHTML='';
 
@@ -289,10 +291,10 @@ function renderDayChips(){
     const row=document.createElement('div');
     row.className='week-row';
     for(let i=0;i<7;i++){
-      const d=addDays(todayMonday, w*7+i);
+      const d=addDays(weekSun, w*7+i);
       const key=toKey(d);
       const chip=document.createElement('div');
-      let cls='day-chip'+(w===0?' cur-week':'');
+      let cls='day-chip'+(w===0?' cur-week':'')+(d.getDay()===0?' sun':'');
       if(key===selDate) cls+=' selected';
       else if(key===today) cls+=' today';
       chip.className=cls;
