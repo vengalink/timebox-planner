@@ -651,24 +651,35 @@ if('serviceWorker' in navigator){
     messagingSenderId: "9411153118",
     appId: "1:9411153118:web:59737428a199c9122bc64f"
   };
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_';
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2';
   const origSet=localStorage.setItem.bind(localStorage);
   const origRemove=localStorage.removeItem.bind(localStorage);
-  let fb=null, docRef=null, unsub=null, applyingRemote=false;
+  let fb=null, docRef=null, unsub=null, applyingRemote=false, firstSnap=true;
   const pending=new Set(); let pushTimer=null;
 
-  function genCode(){const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
-  function getCode(){let c=localStorage.getItem(CODE_KEY);if(!c){c=genCode();origSet(CODE_KEY,c);}return c;}
+  // 이전(기기시계 기반) 버전의 시간 신뢰 1회 초기화 -> 서버시간으로 재정렬
+  if(localStorage.getItem(SV_KEY)!==SV){ origRemove(MT_KEY); origSet(SV_KEY,SV); }
+
+  function rid(n){const a=new Uint8Array(n||12);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
+  function writerId(){let w=localStorage.getItem(WID_KEY);if(!w){w=rid(8);origSet(WID_KEY,w);}return w;}
+  function getCode(){let c=localStorage.getItem(CODE_KEY);if(!c){c=rid(12);origSet(CODE_KEY,c);}return c;}
   function mtimes(){try{return JSON.parse(localStorage.getItem(MT_KEY))||{};}catch(e){return {};}}
   function saveMtimes(o){origSet(MT_KEY,JSON.stringify(o));}
   function tbpKeys(){const r=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PFX))r.push(k);}return r;}
+  function toMillis(t){if(t==null)return null;if(typeof t==='number')return t;if(typeof t.toMillis==='function')return t.toMillis();if(typeof t.seconds==='number')return t.seconds*1000+(t.nanoseconds||0)/1e6;return null;}
 
   // 로컬 편집 감지 (기존 save()가 호출하는 setItem을 가로챔)
-  localStorage.setItem=function(k,v){origSet(k,v);if(!applyingRemote&&k.startsWith(PFX)){const mt=mtimes();mt[k]=Date.now();saveMtimes(mt);schedulePush(k);}};
-  localStorage.removeItem=function(k){origRemove(k);if(!applyingRemote&&k.startsWith(PFX)){const mt=mtimes();mt[k]=Date.now();saveMtimes(mt);schedulePush(k);}};
+  localStorage.setItem=function(k,v){origSet(k,v);if(!applyingRemote&&k.startsWith(PFX))schedulePush(k);};
+  localStorage.removeItem=function(k){origRemove(k);if(!applyingRemote&&k.startsWith(PFX))schedulePush(k);};
 
-  function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,600);}
-  function flushPush(){pushTimer=null;if(!fb||!docRef){pending.clear();return;}const mt=mtimes();const items={};pending.forEach(k=>{const v=localStorage.getItem(k);items[k]={v:v===null?null:v,t:mt[k]||Date.now()};});pending.clear();fb.setDoc(docRef,{items},{merge:true}).catch(e=>console.warn('[sync] push',e));}
+  function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,500);}
+  function flushPush(){pushTimer=null;if(pending.size===0)return;const keys=[...pending];pending.clear();pushKeys(keys);}
+  function pushKeys(keys){
+    if(!fb||!docRef)return;
+    const items={};const w=writerId();
+    keys.forEach(k=>{const v=localStorage.getItem(k);items[k]={v:v===null?null:v,t:fb.serverTimestamp(),w:w};});
+    fb.setDoc(docRef,{items},{merge:true}).catch(e=>console.warn('[sync] push',e));
+  }
 
   function setStatus(state,msg){
     const cls=state==='connected'?'ok':state==='error'?'err':'wait';
@@ -680,24 +691,28 @@ if('serviceWorker' in navigator){
 
   function handleRemote(snap){
     const remote=(snap.exists()?(snap.data().items||{}):{});
-    const mt=mtimes();let changed=false;applyingRemote=true;
-    for(const key of Object.keys(remote)){const r=remote[key];if(!r)continue;const rt=r.t||0;const lt=mt[key]||0;if(rt>lt){if(r.v===null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);mt[key]=rt;changed=true;}}
+    const mt=mtimes();const me=writerId();let changed=false;applyingRemote=true;
+    for(const key of Object.keys(remote)){
+      const r=remote[key];if(!r)continue;
+      const tm=toMillis(r.t);
+      if(tm===null)continue;                  // 서버 미확정(내 쓰기 대기 중) -> 건너뜀
+      if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코 -> 적용 안 함
+      if(tm>(mt[key]||0)){
+        if(r.v===null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
+        mt[key]=tm;changed=true;
+      }
+    }
     saveMtimes(mt);applyingRemote=false;
     if(changed&&window.renderAll)window.renderAll();
     setStatus('connected','Synced');
-    pushLocalNewer(remote);
-  }
-  function pushLocalNewer(remote){
-    const mt=mtimes();const items={};let n=0;
-    for(const key of tbpKeys()){let lt=mt[key];if(lt===undefined){lt=Date.now();mt[key]=lt;}const rt=(remote[key]&&remote[key].t)||0;if(lt>rt){items[key]={v:localStorage.getItem(key),t:lt};n++;}}
-    saveMtimes(mt);
-    if(n>0&&fb&&docRef)fb.setDoc(docRef,{items},{merge:true}).catch(e=>console.warn('[sync] seed',e));
+    if(firstSnap){firstSnap=false;const localOnly=tbpKeys().filter(k=>!(k in remote));if(localOnly.length)pushKeys(localOnly);}
   }
 
   function connect(code){
     if(!fb)return;
     if(unsub){unsub();unsub=null;}
-    localStorage.setItem(CODE_KEY,code); // tbp6_ 아님 -> push 트리거 안 됨
+    firstSnap=true;
+    origSet(CODE_KEY,code);
     docRef=fb.doc(fb.db,'spaces',code);
     setStatus('wait','Connecting…');
     unsub=fb.onSnapshot(docRef,handleRemote,err=>{console.warn('[sync]',err);setStatus('error','Offline');});
@@ -732,7 +747,7 @@ if('serviceWorker' in navigator){
       const F=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
       const app=A.initializeApp(firebaseConfig);
       const db=F.getFirestore(app);
-      fb={db,doc:F.doc,onSnapshot:F.onSnapshot,setDoc:F.setDoc,getDoc:F.getDoc};
+      fb={db,doc:F.doc,onSnapshot:F.onSnapshot,setDoc:F.setDoc,serverTimestamp:F.serverTimestamp};
       connect(getCode());
     }catch(e){console.warn('[sync] firebase init failed',e);setStatus('error','Offline');}
   })();

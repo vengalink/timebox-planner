@@ -1,4 +1,4 @@
-const VERSION = 'v19';
+const VERSION = 'v20';
 const CACHE = 'timebox-' + VERSION;
 const FILES = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
