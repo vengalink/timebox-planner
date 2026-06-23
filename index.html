@@ -657,10 +657,10 @@ if('serviceWorker' in navigator){
     messagingSenderId: "9411153118",
     appId: "1:9411153118:web:59737428a199c9122bc64f"
   };
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2', SYNC_VER='v22';
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2', SYNC_VER='v23';
   const origSet=localStorage.setItem.bind(localStorage);
   const origRemove=localStorage.removeItem.bind(localStorage);
-  let fb=null, docRef=null, unsub=null, applyingRemote=false, firstSnap=true;
+  let fb=null, docRef=null, docCode=null, unsub=null, applyingRemote=false, firstSnap=true;
   const pending=new Set(); let pushTimer=null;
 
   // 이전(기기시계 기반) 버전의 시간 신뢰 1회 초기화 -> 서버시간으로 재정렬
@@ -681,11 +681,25 @@ if('serviceWorker' in navigator){
 
   function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,500);}
   function flushPush(){pushTimer=null;if(pending.size===0)return;const keys=[...pending];pending.clear();pushKeys(keys);}
+  // 쓰기는 REST :commit 으로 (iOS에서 SDK 쓰기 스트림이 서버에 안 닿는 문제 회피)
+  function restCommit(writes){
+    const url="https://firestore.googleapis.com/v1/projects/"+firebaseConfig.projectId+"/databases/(default)/documents:commit?key="+firebaseConfig.apiKey;
+    return fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({writes:writes})})
+      .then(r=>r.json().then(j=>{if(!r.ok||j.error)throw new Error(j.error?j.error.message:('HTTP '+r.status));return j;}));
+  }
   function pushKeys(keys){
-    if(!fb||!docRef)return null;
-    const items={};const w=writerId();
-    keys.forEach(k=>{const v=localStorage.getItem(k);items[k]={v:v===null?null:v,t:fb.serverTimestamp(),w:w};});
-    return fb.setDoc(docRef,{items},{merge:true}).catch(e=>{console.warn('[sync] push',e);throw e;});
+    if(!docCode)return null;
+    const docPath="projects/"+firebaseConfig.projectId+"/databases/(default)/documents/spaces/"+docCode;
+    const w=writerId();const writes=[];
+    keys.forEach(k=>{
+      const v=localStorage.getItem(k);
+      if(v===null||isEmptyDay(v))return;            // 빈 날짜는 절대 올리지 않음
+      const fp="items.`"+k+"`";
+      const itemsFields={};itemsFields[k]={mapValue:{fields:{v:{stringValue:v},w:{stringValue:w}}}};
+      writes.push({update:{name:docPath,fields:{items:{mapValue:{fields:itemsFields}}}},updateMask:{fieldPaths:[fp+".v",fp+".w"]},updateTransforms:[{fieldPath:fp+".t",setToServerValue:"REQUEST_TIME"}]});
+    });
+    if(!writes.length)return null;
+    return restCommit(writes).catch(e=>{console.warn('[sync] push',e);throw e;});
   }
 
   function setStatus(state,msg){
@@ -714,8 +728,8 @@ if('serviceWorker' in navigator){
       saveMtimes(mt);applyingRemote=false;
       if(changed&&window.renderAll)window.renderAll();
       setStatus('connected','Synced');
-      // 내 로컬의 '내용 있는' 날짜를 클라우드에 게시 (빈 날짜는 올리지 않음)
-      const pub=tbpKeys().filter(k=>{const v=localStorage.getItem(k);return v!=null&&!isEmptyDay(v);});
+      // 게시: 내 로컬 '내용 있는' 날짜 중, 원격에 없거나 원격이 비어있는 것만 (원격 내용은 안 덮어씀)
+      const pub=tbpKeys().filter(k=>{const v=localStorage.getItem(k);if(v==null||isEmptyDay(v))return false;const r=remote[k];return !r||r.v==null||isEmptyDay(r.v);});
       if(pub.length)pushKeys(pub);
       return;
     }
@@ -736,10 +750,10 @@ if('serviceWorker' in navigator){
   }
 
   function connect(code){
-    if(!fb)return;
+    docCode=code; origSet(CODE_KEY,code);
     if(unsub){unsub();unsub=null;}
     firstSnap=true;
-    origSet(CODE_KEY,code);
+    if(!fb)return;
     docRef=fb.doc(fb.db,'spaces',code);
     setStatus('wait','Connecting…');
     unsub=fb.onSnapshot(docRef,handleRemote,err=>{console.warn('[sync]',err);setStatus('error','Offline');});
@@ -757,7 +771,7 @@ if('serviceWorker' in navigator){
   window.forceUpload=function(){
     const btn=document.getElementById('sync-force-btn');
     const o='Make this device the source';
-    if(!fb||!docRef){if(btn){btn.textContent='Not connected';setTimeout(()=>btn.textContent=o,1800);}return;}
+    if(!docCode){if(btn){btn.textContent='Not connected';setTimeout(()=>btn.textContent=o,1800);}return;}
     const keys=tbpKeys().filter(k=>{const v=localStorage.getItem(k);return v!=null&&!isEmptyDay(v);});
     if(!keys.length){if(btn){btn.textContent='No entries to upload';setTimeout(()=>btn.textContent=o,1800);}return;}
     if(btn)btn.textContent='Uploading…';
