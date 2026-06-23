@@ -30,10 +30,6 @@
     padding:calc(var(--safe-top) + 10px) 16px 10px;display:flex;align-items:center;justify-content:space-between;}
   .header-title{color:#fff;font-size:15px;font-weight:700;}
   .header-date{color:#aaa;font-size:12px;}
-  .header-right{display:flex;align-items:center;gap:8px;}
-  .sync-btn{background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:8px;
-    padding:4px 8px;font-size:14px;line-height:1;cursor:pointer;}
-  .sync-btn.ok{color:#7ecfa0;} .sync-btn.err{color:#f3a39a;} .sync-btn.wait{color:#f7df6e;}
 
   /* 날짜 바 */
   .date-bar{flex-shrink:0;z-index:40;background:#fff;border-bottom:1px solid var(--border);
@@ -169,27 +165,6 @@
   .cat-btn:active{background:var(--accent);color:#fff;}
   .cat-cancel{width:100%;margin-top:10px;padding:12px;border:none;border-radius:12px;
     font-size:13px;color:#888;background:#f0ede8;cursor:pointer;}
-  /* 기기 동기화 모달 */
-  .sync-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:200;
-    align-items:center;justify-content:center;padding:20px;}
-  .sync-overlay.show{display:flex;}
-  .sync-sheet{background:#faf8f4;border-radius:16px;padding:20px;width:100%;max-width:360px;
-    box-shadow:0 10px 40px rgba(0,0,0,.3);}
-  .sync-status{font-size:12px;text-align:center;margin-bottom:14px;color:#888;}
-  .sync-status .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;
-    vertical-align:middle;background:#888;}
-  .sync-status.ok .dot{background:#7ecfa0;} .sync-status.err .dot{background:#e05a4f;}
-  .sync-status.wait .dot{background:#f7df6e;}
-  .sync-label{display:block;font-size:11px;font-weight:700;color:var(--accent);margin:12px 0 6px;}
-  .sync-row{display:flex;gap:8px;}
-  .sync-input{flex:1;min-width:0;padding:10px;border:1.5px solid var(--border);border-radius:10px;
-    font-size:12px;background:#fff;color:var(--accent);font-family:monospace;}
-  .sync-act{padding:10px 14px;border:none;border-radius:10px;background:var(--accent);color:#fff;
-    font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
-  .sync-hint{font-size:11px;color:#999;margin-top:10px;line-height:1.55;}
-  .sync-force{width:100%;margin-top:16px;padding:11px;border:1.5px solid var(--accent);border-radius:10px;
-    background:#fff;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;}
-  .sync-force:active{background:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -198,10 +173,7 @@
 
 <div class="header" id="header">
   <div class="header-title">📅 Timebox Planner</div>
-  <div class="header-right">
-    <span class="header-date" id="hdr-date"></span>
-    <button class="sync-btn" id="sync-btn" title="Device sync" onclick="openSync()">⟳</button>
-  </div>
+  <div class="header-date" id="hdr-date"></div>
 </div>
 
 <div class="date-bar" id="date-bar">
@@ -271,32 +243,6 @@
       <button class="cat-btn" onclick="confirmDemote('BUSINESS')">BUSINESS</button>
     </div>
     <button class="cat-cancel" onclick="closeCatSheet()">Cancel</button>
-  </div>
-</div>
-
-<!-- 기기 동기화 -->
-<div class="sync-overlay" id="sync-overlay" onclick="if(event.target===this)closeSync()">
-  <div class="sync-sheet">
-    <div class="cat-title">Sync across devices</div>
-    <div class="sync-status wait" id="sync-status"><span class="dot"></span>Connecting…</div>
-
-    <label class="sync-label">This device's sync code</label>
-    <div class="sync-row">
-      <input class="sync-input" id="sync-code-view" readonly>
-      <button class="sync-act" id="sync-copy-btn" onclick="copySyncCode()">Copy</button>
-    </div>
-    <div class="sync-hint">On your other device, open this panel, paste this code below, and tap Connect. Both devices then stay in sync automatically.</div>
-
-    <label class="sync-label">Link a code from another device</label>
-    <div class="sync-row">
-      <input class="sync-input" id="sync-code-input" placeholder="Paste code…" autocapitalize="off" autocomplete="off" spellcheck="false">
-      <button class="sync-act" onclick="connectSyncCode()">Connect</button>
-    </div>
-
-    <button class="sync-force" id="sync-force-btn" onclick="forceUpload()">Make this device the source</button>
-    <div class="sync-hint" id="sync-ver" style="text-align:center;margin-top:6px;"></div>
-
-    <button class="cat-cancel" onclick="closeSync()">Close</button>
   </div>
 </div>
 
@@ -646,164 +592,5 @@ if('serviceWorker' in navigator){
 }
 </script>
 
-<!-- ====== Firebase cloud sync (iPhone <-> PC) ====== -->
-<script type="module">
-(function(){
-  const API="AIzaSyCE_deSviVmhL1nw9cpAv6wvdESQ1AX3VA", PROJ="timebox-ac6b4";
-  const DBPATH="projects/"+PROJ+"/databases/(default)/documents";
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='3', SYNC_VER='v25';
-  const origSet=localStorage.setItem.bind(localStorage);
-  const origRemove=localStorage.removeItem.bind(localStorage);
-  let docCode=null, applyingRemote=false, firstSnap=true, pollTimer=null;
-  const pending=new Set(); let pushTimer=null;
-
-  // 스키마/전송방식 변경(REST 폴링) 1회 초기화
-  if(localStorage.getItem(SV_KEY)!==SV){ origRemove(MT_KEY); origSet(SV_KEY,SV); }
-
-  function rid(n){const a=new Uint8Array(n||12);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
-  function writerId(){let w=localStorage.getItem(WID_KEY);if(!w){w=rid(8);origSet(WID_KEY,w);}return w;}
-  function getCode(){let c=localStorage.getItem(CODE_KEY);if(!c){c=rid(12);origSet(CODE_KEY,c);}return c;}
-  function mtimes(){try{return JSON.parse(localStorage.getItem(MT_KEY))||{};}catch(e){return {};}}
-  function saveMtimes(o){origSet(MT_KEY,JSON.stringify(o));}
-  function tbpKeys(){const r=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PFX))r.push(k);}return r;}
-  function isEmptyDay(v){try{const o=JSON.parse(v);const ps=(o.priorities||[]).some(x=>x&&(x.text||'').trim());let ds=false;const d=o.dumps||{};for(const c in d){if((d[c]||[]).some(x=>x&&(x.text||'').trim())){ds=true;break;}}return !ps&&!ds;}catch(e){return !v;}}
-
-  // 로컬 편집 감지 (기존 save()가 호출하는 setItem을 가로챔)
-  localStorage.setItem=function(k,v){origSet(k,v);if(!applyingRemote&&k.startsWith(PFX))schedulePush(k);};
-  localStorage.removeItem=function(k){origRemove(k);if(!applyingRemote&&k.startsWith(PFX))schedulePush(k);};
-
-  function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,500);}
-  function flushPush(){pushTimer=null;if(pending.size===0)return;const keys=[...pending];pending.clear();pushKeys(keys);}
-  // === 전부 REST (SDK 미사용): 쓰기 :commit, 읽기 GET 폴링 ===
-  function commitUrl(){return "https://firestore.googleapis.com/v1/"+DBPATH+":commit?key="+API;}
-  function readUrl(){return "https://firestore.googleapis.com/v1/"+DBPATH+"/spaces/"+docCode+"?key="+API;}
-  function pushKeys(keys){
-    if(!docCode)return null;
-    const docName=DBPATH+"/spaces/"+docCode;
-    const w=writerId();const writes=[];
-    keys.forEach(k=>{
-      const v=localStorage.getItem(k);
-      if(v===null||isEmptyDay(v))return;            // 빈 날짜는 절대 올리지 않음
-      const fp="items.`"+k+"`";
-      const itemsFields={};itemsFields[k]={mapValue:{fields:{v:{stringValue:v},w:{stringValue:w}}}};
-      writes.push({update:{name:docName,fields:{items:{mapValue:{fields:itemsFields}}}},updateMask:{fieldPaths:[fp+".v",fp+".w"]},updateTransforms:[{fieldPath:fp+".t",setToServerValue:"REQUEST_TIME"}]});
-    });
-    if(!writes.length)return null;
-    return fetch(commitUrl(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({writes:writes})})
-      .then(r=>r.json().then(j=>{if(!r.ok||j.error)throw new Error(j.error?j.error.message:('HTTP '+r.status));return j;}))
-      .then(j=>{pollOnce();return j;})
-      .catch(e=>{console.warn('[sync] push',e);throw e;});
-  }
-  function parseDoc(j){
-    const items={};const f=j&&j.fields&&j.fields.items&&j.fields.items.mapValue&&j.fields.items.mapValue.fields;
-    if(f){for(const k in f){const mf=f[k]&&f[k].mapValue&&f[k].mapValue.fields;if(!mf)continue;
-      let v;if(mf.v&&('stringValue'in mf.v))v=mf.v.stringValue;else if(mf.v&&('nullValue'in mf.v))v=null;else v=undefined;
-      const w=(mf.w&&mf.w.stringValue)||'';
-      let t=0;if(mf.t&&mf.t.timestampValue)t=Date.parse(mf.t.timestampValue);
-      items[k]={v:v,w:w,t:t};
-    }}
-    return items;
-  }
-  function pollOnce(){
-    if(!docCode)return Promise.resolve();
-    return fetch(readUrl(),{cache:"no-store"})
-      .then(r=>{if(r.status===404)return {};return r.json().then(j=>{if(j.error)throw new Error(j.error.message);return parseDoc(j);});})
-      .then(items=>{applyRemote(items);setStatus('connected','Synced');})
-      .catch(e=>{console.warn('[sync] poll',e);setStatus('error','Offline');});
-  }
-  function startPolling(){stopPolling();pollOnce();pollTimer=setInterval(function(){if(document.visibilityState==='visible')pollOnce();},3500);}
-  function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
-
-  function setStatus(state,msg){
-    const cls=state==='connected'?'ok':state==='error'?'err':'wait';
-    const el=document.getElementById('sync-status');
-    const btn=document.getElementById('sync-btn');
-    if(el){el.className='sync-status '+cls;el.innerHTML='<span class="dot"></span>'+(msg||state);}
-    if(btn){btn.className='sync-btn '+cls;}
-  }
-
-  function applyRemote(remote){
-    const mt=mtimes();const me=writerId();let changed=false;let pub=null;
-    applyingRemote=true;
-    try{
-      if(firstSnap){
-        firstSnap=false;
-        // 첫 동기화: 내 로컬에 내용이 있으면 보존, 비어있는 날짜만 원격 채택
-        for(const key in remote){ try{
-          const r=remote[key];const tm=r.t||0;const lv=localStorage.getItem(key);
-          if(r.v!=null&&!isEmptyDay(r.v)){
-            if(lv===null||isEmptyDay(lv)){localStorage.setItem(key,r.v);changed=true;}
-            mt[key]=tm;
-          } else { mt[key]=tm; }
-        }catch(e){console.warn('[sync] key',key,e);} }
-        // 게시: 내 로컬 '내용 있는' 날짜 중, 원격에 없거나 원격이 비어있는 것만 (원격 내용은 안 덮어씀)
-        pub=tbpKeys().filter(function(k){const v=localStorage.getItem(k);if(v==null||isEmptyDay(v))return false;const r=remote[k];return !r||r.v==null||isEmptyDay(r.v);});
-      } else {
-        for(const key in remote){ try{
-          const r=remote[key];const tm=r.t||0;
-          if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코
-          if(tm>(mt[key]||0)){
-            if(r.v==null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
-            mt[key]=tm;changed=true;
-          }
-        }catch(e){console.warn('[sync] key',key,e);} }
-      }
-      saveMtimes(mt);
-    } finally {
-      applyingRemote=false;   // 예외가 나도 항상 해제 -> 내 편집이 업로드 차단되지 않게
-    }
-    if(changed&&window.renderAll)window.renderAll();
-    setStatus('connected','Synced');
-    if(pub&&pub.length)pushKeys(pub);
-  }
-
-  function connect(code){
-    docCode=code; origSet(CODE_KEY,code);
-    firstSnap=true;
-    setStatus('wait','Connecting…');
-    startPolling();
-  }
-
-  // ---- UI (전역 노출) ----
-  window.openSync=function(){
-    const ov=document.getElementById('sync-overlay');
-    document.getElementById('sync-code-view').value=getCode();
-    document.getElementById('sync-code-input').value='';
-    const ve=document.getElementById('sync-ver');
-    if(ve)ve.textContent='Version '+SYNC_VER+' · device '+writerId().slice(0,6);
-    ov.classList.add('show');
-  };
-  window.forceUpload=function(){
-    const btn=document.getElementById('sync-force-btn');
-    const o='Make this device the source';
-    if(!docCode){if(btn){btn.textContent='Not connected';setTimeout(()=>btn.textContent=o,1800);}return;}
-    const keys=tbpKeys().filter(k=>{const v=localStorage.getItem(k);return v!=null&&!isEmptyDay(v);});
-    if(!keys.length){if(btn){btn.textContent='No entries to upload';setTimeout(()=>btn.textContent=o,1800);}return;}
-    if(btn)btn.textContent='Uploading…';
-    const p=pushKeys(keys);
-    if(p)p.then(()=>{if(btn){btn.textContent='Uploaded '+keys.length+' day(s) ✓';setTimeout(()=>btn.textContent=o,2500);}})
-         .catch(()=>{if(btn){btn.textContent='Upload failed — check connection';setTimeout(()=>btn.textContent=o,3000);}});
-  };
-  window.closeSync=function(){document.getElementById('sync-overlay').classList.remove('show');};
-  window.copySyncCode=function(){
-    const c=getCode();const btn=document.getElementById('sync-copy-btn');
-    const ok=()=>{if(btn){const o=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=o,1200);}};
-    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(c).then(ok).catch(()=>{const inp=document.getElementById('sync-code-view');inp.select();document.execCommand('copy');ok();});}
-    else{const inp=document.getElementById('sync-code-view');inp.select();document.execCommand('copy');ok();}
-  };
-  window.connectSyncCode=function(){
-    const v=(document.getElementById('sync-code-input').value||'').trim();
-    if(!v){return;}
-    connect(v);
-    document.getElementById('sync-code-view').value=v;
-    document.getElementById('sync-code-input').value='';
-  };
-
-  // ---- 시작 (SDK 없이 REST 폴링) ----
-  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')pollOnce();});
-  window.addEventListener('online',function(){pollOnce();});
-  connect(getCode());
-})();
-</script>
 </body>
 </html>
