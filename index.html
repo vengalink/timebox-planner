@@ -649,21 +649,15 @@ if('serviceWorker' in navigator){
 <!-- ====== Firebase cloud sync (iPhone <-> PC) ====== -->
 <script type="module">
 (function(){
-  const firebaseConfig = {
-    apiKey: "AIzaSyCE_deSviVmhL1nw9cpAv6wvdESQ1AX3VA",
-    authDomain: "timebox-ac6b4.firebaseapp.com",
-    projectId: "timebox-ac6b4",
-    storageBucket: "timebox-ac6b4.firebasestorage.app",
-    messagingSenderId: "9411153118",
-    appId: "1:9411153118:web:59737428a199c9122bc64f"
-  };
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2', SYNC_VER='v23';
+  const API="AIzaSyCE_deSviVmhL1nw9cpAv6wvdESQ1AX3VA", PROJ="timebox-ac6b4";
+  const DBPATH="projects/"+PROJ+"/databases/(default)/documents";
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='3', SYNC_VER='v24';
   const origSet=localStorage.setItem.bind(localStorage);
   const origRemove=localStorage.removeItem.bind(localStorage);
-  let fb=null, docRef=null, docCode=null, unsub=null, applyingRemote=false, firstSnap=true;
+  let docCode=null, applyingRemote=false, firstSnap=true, pollTimer=null;
   const pending=new Set(); let pushTimer=null;
 
-  // 이전(기기시계 기반) 버전의 시간 신뢰 1회 초기화 -> 서버시간으로 재정렬
+  // 스키마/전송방식 변경(REST 폴링) 1회 초기화
   if(localStorage.getItem(SV_KEY)!==SV){ origRemove(MT_KEY); origSet(SV_KEY,SV); }
 
   function rid(n){const a=new Uint8Array(n||12);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
@@ -672,7 +666,6 @@ if('serviceWorker' in navigator){
   function mtimes(){try{return JSON.parse(localStorage.getItem(MT_KEY))||{};}catch(e){return {};}}
   function saveMtimes(o){origSet(MT_KEY,JSON.stringify(o));}
   function tbpKeys(){const r=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PFX))r.push(k);}return r;}
-  function toMillis(t){if(t==null)return null;if(typeof t==='object'&&typeof t.toMillis==='function')return t.toMillis();if(typeof t==='object'&&typeof t.seconds==='number')return t.seconds*1000+(t.nanoseconds||0)/1e6;return 0;} /* 레거시 숫자/기타 -> 가장 오래된 것 취급 */
   function isEmptyDay(v){try{const o=JSON.parse(v);const ps=(o.priorities||[]).some(x=>x&&(x.text||'').trim());let ds=false;const d=o.dumps||{};for(const c in d){if((d[c]||[]).some(x=>x&&(x.text||'').trim())){ds=true;break;}}return !ps&&!ds;}catch(e){return !v;}}
 
   // 로컬 편집 감지 (기존 save()가 호출하는 setItem을 가로챔)
@@ -681,26 +674,45 @@ if('serviceWorker' in navigator){
 
   function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,500);}
   function flushPush(){pushTimer=null;if(pending.size===0)return;const keys=[...pending];pending.clear();pushKeys(keys);}
-  // 쓰기는 REST :commit 으로 (iOS에서 SDK 쓰기 스트림이 서버에 안 닿는 문제 회피)
-  function restCommit(writes){
-    const url="https://firestore.googleapis.com/v1/projects/"+firebaseConfig.projectId+"/databases/(default)/documents:commit?key="+firebaseConfig.apiKey;
-    return fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({writes:writes})})
-      .then(r=>r.json().then(j=>{if(!r.ok||j.error)throw new Error(j.error?j.error.message:('HTTP '+r.status));return j;}));
-  }
+  // === 전부 REST (SDK 미사용): 쓰기 :commit, 읽기 GET 폴링 ===
+  function commitUrl(){return "https://firestore.googleapis.com/v1/"+DBPATH+":commit?key="+API;}
+  function readUrl(){return "https://firestore.googleapis.com/v1/"+DBPATH+"/spaces/"+docCode+"?key="+API;}
   function pushKeys(keys){
     if(!docCode)return null;
-    const docPath="projects/"+firebaseConfig.projectId+"/databases/(default)/documents/spaces/"+docCode;
+    const docName=DBPATH+"/spaces/"+docCode;
     const w=writerId();const writes=[];
     keys.forEach(k=>{
       const v=localStorage.getItem(k);
       if(v===null||isEmptyDay(v))return;            // 빈 날짜는 절대 올리지 않음
       const fp="items.`"+k+"`";
       const itemsFields={};itemsFields[k]={mapValue:{fields:{v:{stringValue:v},w:{stringValue:w}}}};
-      writes.push({update:{name:docPath,fields:{items:{mapValue:{fields:itemsFields}}}},updateMask:{fieldPaths:[fp+".v",fp+".w"]},updateTransforms:[{fieldPath:fp+".t",setToServerValue:"REQUEST_TIME"}]});
+      writes.push({update:{name:docName,fields:{items:{mapValue:{fields:itemsFields}}}},updateMask:{fieldPaths:[fp+".v",fp+".w"]},updateTransforms:[{fieldPath:fp+".t",setToServerValue:"REQUEST_TIME"}]});
     });
     if(!writes.length)return null;
-    return restCommit(writes).catch(e=>{console.warn('[sync] push',e);throw e;});
+    return fetch(commitUrl(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({writes:writes})})
+      .then(r=>r.json().then(j=>{if(!r.ok||j.error)throw new Error(j.error?j.error.message:('HTTP '+r.status));return j;}))
+      .then(j=>{pollOnce();return j;})
+      .catch(e=>{console.warn('[sync] push',e);throw e;});
   }
+  function parseDoc(j){
+    const items={};const f=j&&j.fields&&j.fields.items&&j.fields.items.mapValue&&j.fields.items.mapValue.fields;
+    if(f){for(const k in f){const mf=f[k]&&f[k].mapValue&&f[k].mapValue.fields;if(!mf)continue;
+      let v;if(mf.v&&('stringValue'in mf.v))v=mf.v.stringValue;else if(mf.v&&('nullValue'in mf.v))v=null;else v=undefined;
+      const w=(mf.w&&mf.w.stringValue)||'';
+      let t=0;if(mf.t&&mf.t.timestampValue)t=Date.parse(mf.t.timestampValue);
+      items[k]={v:v,w:w,t:t};
+    }}
+    return items;
+  }
+  function pollOnce(){
+    if(!docCode)return Promise.resolve();
+    return fetch(readUrl(),{cache:"no-store"})
+      .then(r=>{if(r.status===404)return {};return r.json().then(j=>{if(j.error)throw new Error(j.error.message);return parseDoc(j);});})
+      .then(items=>{applyRemote(items);setStatus('connected','Synced');})
+      .catch(e=>{console.warn('[sync] poll',e);setStatus('error','Offline');});
+  }
+  function startPolling(){stopPolling();pollOnce();pollTimer=setInterval(function(){if(document.visibilityState==='visible')pollOnce();},3500);}
+  function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 
   function setStatus(state,msg){
     const cls=state==='connected'?'ok':state==='error'?'err':'wait';
@@ -710,53 +722,45 @@ if('serviceWorker' in navigator){
     if(btn){btn.className='sync-btn '+cls;}
   }
 
-  function handleRemote(snap){
-    const remote=(snap.exists()?(snap.data().items||{}):{});
+  function applyRemote(remote){
     const mt=mtimes();const me=writerId();let changed=false;applyingRemote=true;
 
     if(firstSnap){
       firstSnap=false;
-      // 첫 연결: 내 로컬에 내용이 있으면 보존, 비어있는 날짜만 원격 채택
-      for(const key of Object.keys(remote)){
-        const r=remote[key];if(!r)continue;const tm=toMillis(r.t);
-        const lv=localStorage.getItem(key);
-        if(lv===null||isEmptyDay(lv)){
-          if(r.v!=null&&!isEmptyDay(r.v)){localStorage.setItem(key,r.v);mt[key]=tm||0;changed=true;}
-          else mt[key]=tm||0;
-        } else { mt[key]=tm||0; } // 로컬 내용 보존
+      // 첫 동기화: 내 로컬에 내용이 있으면 보존, 비어있는 날짜만 원격 채택
+      for(const key in remote){
+        const r=remote[key];const tm=r.t||0;const lv=localStorage.getItem(key);
+        if(r.v!=null&&!isEmptyDay(r.v)){
+          if(lv===null||isEmptyDay(lv)){localStorage.setItem(key,r.v);changed=true;}
+          mt[key]=tm;
+        } else { mt[key]=tm; }
       }
       saveMtimes(mt);applyingRemote=false;
       if(changed&&window.renderAll)window.renderAll();
       setStatus('connected','Synced');
       // 게시: 내 로컬 '내용 있는' 날짜 중, 원격에 없거나 원격이 비어있는 것만 (원격 내용은 안 덮어씀)
-      const pub=tbpKeys().filter(k=>{const v=localStorage.getItem(k);if(v==null||isEmptyDay(v))return false;const r=remote[k];return !r||r.v==null||isEmptyDay(r.v);});
+      const pub=tbpKeys().filter(function(k){const v=localStorage.getItem(k);if(v==null||isEmptyDay(v))return false;const r=remote[k];return !r||r.v==null||isEmptyDay(r.v);});
       if(pub.length)pushKeys(pub);
       return;
     }
 
-    for(const key of Object.keys(remote)){
-      const r=remote[key];if(!r)continue;
-      const tm=toMillis(r.t);
-      if(tm===null)continue;                  // 서버 미확정(내 쓰기 대기 중)
+    for(const key in remote){
+      const r=remote[key];const tm=r.t||0;
       if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코
       if(tm>(mt[key]||0)){
-        if(r.v===null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
+        if(r.v==null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
         mt[key]=tm;changed=true;
       }
     }
     saveMtimes(mt);applyingRemote=false;
     if(changed&&window.renderAll)window.renderAll();
-    setStatus('connected','Synced');
   }
 
   function connect(code){
     docCode=code; origSet(CODE_KEY,code);
-    if(unsub){unsub();unsub=null;}
     firstSnap=true;
-    if(!fb)return;
-    docRef=fb.doc(fb.db,'spaces',code);
     setStatus('wait','Connecting…');
-    unsub=fb.onSnapshot(docRef,handleRemote,err=>{console.warn('[sync]',err);setStatus('error','Offline');});
+    startPolling();
   }
 
   // ---- UI (전역 노출) ----
@@ -794,19 +798,10 @@ if('serviceWorker' in navigator){
     document.getElementById('sync-code-input').value='';
   };
 
-  // ---- Firebase 초기화 ----
-  (async()=>{
-    try{
-      const A=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-      const F=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-      const app=A.initializeApp(firebaseConfig);
-      let db;
-      try{ db=F.initializeFirestore(app,{experimentalForceLongPolling:true}); } // iOS/네트워크 전송 멈춤 회피
-      catch(e){ db=F.getFirestore(app); }
-      fb={db,doc:F.doc,onSnapshot:F.onSnapshot,setDoc:F.setDoc,serverTimestamp:F.serverTimestamp};
-      connect(getCode());
-    }catch(e){console.warn('[sync] firebase init failed',e);setStatus('error','Offline');}
-  })();
+  // ---- 시작 (SDK 없이 REST 폴링) ----
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')pollOnce();});
+  window.addEventListener('online',function(){pollOnce();});
+  connect(getCode());
 })();
 </script>
 </body>
