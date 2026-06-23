@@ -187,6 +187,9 @@
   .sync-act{padding:10px 14px;border:none;border-radius:10px;background:var(--accent);color:#fff;
     font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
   .sync-hint{font-size:11px;color:#999;margin-top:10px;line-height:1.55;}
+  .sync-force{width:100%;margin-top:16px;padding:11px;border:1.5px solid var(--accent);border-radius:10px;
+    background:#fff;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;}
+  .sync-force:active{background:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -289,6 +292,9 @@
       <input class="sync-input" id="sync-code-input" placeholder="Paste code…" autocapitalize="off" autocomplete="off" spellcheck="false">
       <button class="sync-act" onclick="connectSyncCode()">Connect</button>
     </div>
+
+    <button class="sync-force" id="sync-force-btn" onclick="forceUpload()">Make this device the source</button>
+    <div class="sync-hint" id="sync-ver" style="text-align:center;margin-top:6px;"></div>
 
     <button class="cat-cancel" onclick="closeSync()">Close</button>
   </div>
@@ -651,7 +657,7 @@ if('serviceWorker' in navigator){
     messagingSenderId: "9411153118",
     appId: "1:9411153118:web:59737428a199c9122bc64f"
   };
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2';
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2', SYNC_VER='v21';
   const origSet=localStorage.setItem.bind(localStorage);
   const origRemove=localStorage.removeItem.bind(localStorage);
   let fb=null, docRef=null, unsub=null, applyingRemote=false, firstSnap=true;
@@ -666,7 +672,8 @@ if('serviceWorker' in navigator){
   function mtimes(){try{return JSON.parse(localStorage.getItem(MT_KEY))||{};}catch(e){return {};}}
   function saveMtimes(o){origSet(MT_KEY,JSON.stringify(o));}
   function tbpKeys(){const r=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PFX))r.push(k);}return r;}
-  function toMillis(t){if(t==null)return null;if(typeof t==='number')return t;if(typeof t.toMillis==='function')return t.toMillis();if(typeof t.seconds==='number')return t.seconds*1000+(t.nanoseconds||0)/1e6;return null;}
+  function toMillis(t){if(t==null)return null;if(typeof t==='object'&&typeof t.toMillis==='function')return t.toMillis();if(typeof t==='object'&&typeof t.seconds==='number')return t.seconds*1000+(t.nanoseconds||0)/1e6;return 0;} /* 레거시 숫자/기타 -> 가장 오래된 것 취급 */
+  function isEmptyDay(v){try{const o=JSON.parse(v);const ps=(o.priorities||[]).some(x=>x&&(x.text||'').trim());let ds=false;const d=o.dumps||{};for(const c in d){if((d[c]||[]).some(x=>x&&(x.text||'').trim())){ds=true;break;}}return !ps&&!ds;}catch(e){return !v;}}
 
   // 로컬 편집 감지 (기존 save()가 호출하는 setItem을 가로챔)
   localStorage.setItem=function(k,v){origSet(k,v);if(!applyingRemote&&k.startsWith(PFX))schedulePush(k);};
@@ -692,11 +699,32 @@ if('serviceWorker' in navigator){
   function handleRemote(snap){
     const remote=(snap.exists()?(snap.data().items||{}):{});
     const mt=mtimes();const me=writerId();let changed=false;applyingRemote=true;
+
+    if(firstSnap){
+      firstSnap=false;
+      // 첫 연결: 내 로컬에 내용이 있으면 보존, 비어있는 날짜만 원격 채택
+      for(const key of Object.keys(remote)){
+        const r=remote[key];if(!r)continue;const tm=toMillis(r.t);
+        const lv=localStorage.getItem(key);
+        if(lv===null||isEmptyDay(lv)){
+          if(r.v!=null&&!isEmptyDay(r.v)){localStorage.setItem(key,r.v);mt[key]=tm||0;changed=true;}
+          else mt[key]=tm||0;
+        } else { mt[key]=tm||0; } // 로컬 내용 보존
+      }
+      saveMtimes(mt);applyingRemote=false;
+      if(changed&&window.renderAll)window.renderAll();
+      setStatus('connected','Synced');
+      // 내 로컬의 '내용 있는' 날짜를 클라우드에 게시 (빈 날짜는 올리지 않음)
+      const pub=tbpKeys().filter(k=>{const v=localStorage.getItem(k);return v!=null&&!isEmptyDay(v);});
+      if(pub.length)pushKeys(pub);
+      return;
+    }
+
     for(const key of Object.keys(remote)){
       const r=remote[key];if(!r)continue;
       const tm=toMillis(r.t);
-      if(tm===null)continue;                  // 서버 미확정(내 쓰기 대기 중) -> 건너뜀
-      if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코 -> 적용 안 함
+      if(tm===null)continue;                  // 서버 미확정(내 쓰기 대기 중)
+      if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코
       if(tm>(mt[key]||0)){
         if(r.v===null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
         mt[key]=tm;changed=true;
@@ -705,7 +733,6 @@ if('serviceWorker' in navigator){
     saveMtimes(mt);applyingRemote=false;
     if(changed&&window.renderAll)window.renderAll();
     setStatus('connected','Synced');
-    if(firstSnap){firstSnap=false;const localOnly=tbpKeys().filter(k=>!(k in remote));if(localOnly.length)pushKeys(localOnly);}
   }
 
   function connect(code){
@@ -723,7 +750,18 @@ if('serviceWorker' in navigator){
     const ov=document.getElementById('sync-overlay');
     document.getElementById('sync-code-view').value=getCode();
     document.getElementById('sync-code-input').value='';
+    const ve=document.getElementById('sync-ver');
+    if(ve)ve.textContent='Version '+SYNC_VER+' · device '+writerId().slice(0,6);
     ov.classList.add('show');
+  };
+  window.forceUpload=function(){
+    const btn=document.getElementById('sync-force-btn');
+    const o='Make this device the source';
+    if(!fb||!docRef){if(btn){btn.textContent='Not connected';setTimeout(()=>btn.textContent=o,1800);}return;}
+    const keys=tbpKeys().filter(k=>{const v=localStorage.getItem(k);return v!=null&&!isEmptyDay(v);});
+    if(!keys.length){if(btn){btn.textContent='No entries to upload';setTimeout(()=>btn.textContent=o,1800);}return;}
+    pushKeys(keys);
+    if(btn){btn.textContent='Uploaded '+keys.length+' day(s) ✓';setTimeout(()=>btn.textContent=o,2000);}
   };
   window.closeSync=function(){document.getElementById('sync-overlay').classList.remove('show');};
   window.copySyncCode=function(){
