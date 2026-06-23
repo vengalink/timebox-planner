@@ -651,7 +651,7 @@ if('serviceWorker' in navigator){
 (function(){
   const API="AIzaSyCE_deSviVmhL1nw9cpAv6wvdESQ1AX3VA", PROJ="timebox-ac6b4";
   const DBPATH="projects/"+PROJ+"/databases/(default)/documents";
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='3', SYNC_VER='v24';
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='3', SYNC_VER='v25';
   const origSet=localStorage.setItem.bind(localStorage);
   const origRemove=localStorage.removeItem.bind(localStorage);
   let docCode=null, applyingRemote=false, firstSnap=true, pollTimer=null;
@@ -723,37 +723,38 @@ if('serviceWorker' in navigator){
   }
 
   function applyRemote(remote){
-    const mt=mtimes();const me=writerId();let changed=false;applyingRemote=true;
-
-    if(firstSnap){
-      firstSnap=false;
-      // 첫 동기화: 내 로컬에 내용이 있으면 보존, 비어있는 날짜만 원격 채택
-      for(const key in remote){
-        const r=remote[key];const tm=r.t||0;const lv=localStorage.getItem(key);
-        if(r.v!=null&&!isEmptyDay(r.v)){
-          if(lv===null||isEmptyDay(lv)){localStorage.setItem(key,r.v);changed=true;}
-          mt[key]=tm;
-        } else { mt[key]=tm; }
+    const mt=mtimes();const me=writerId();let changed=false;let pub=null;
+    applyingRemote=true;
+    try{
+      if(firstSnap){
+        firstSnap=false;
+        // 첫 동기화: 내 로컬에 내용이 있으면 보존, 비어있는 날짜만 원격 채택
+        for(const key in remote){ try{
+          const r=remote[key];const tm=r.t||0;const lv=localStorage.getItem(key);
+          if(r.v!=null&&!isEmptyDay(r.v)){
+            if(lv===null||isEmptyDay(lv)){localStorage.setItem(key,r.v);changed=true;}
+            mt[key]=tm;
+          } else { mt[key]=tm; }
+        }catch(e){console.warn('[sync] key',key,e);} }
+        // 게시: 내 로컬 '내용 있는' 날짜 중, 원격에 없거나 원격이 비어있는 것만 (원격 내용은 안 덮어씀)
+        pub=tbpKeys().filter(function(k){const v=localStorage.getItem(k);if(v==null||isEmptyDay(v))return false;const r=remote[k];return !r||r.v==null||isEmptyDay(r.v);});
+      } else {
+        for(const key in remote){ try{
+          const r=remote[key];const tm=r.t||0;
+          if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코
+          if(tm>(mt[key]||0)){
+            if(r.v==null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
+            mt[key]=tm;changed=true;
+          }
+        }catch(e){console.warn('[sync] key',key,e);} }
       }
-      saveMtimes(mt);applyingRemote=false;
-      if(changed&&window.renderAll)window.renderAll();
-      setStatus('connected','Synced');
-      // 게시: 내 로컬 '내용 있는' 날짜 중, 원격에 없거나 원격이 비어있는 것만 (원격 내용은 안 덮어씀)
-      const pub=tbpKeys().filter(function(k){const v=localStorage.getItem(k);if(v==null||isEmptyDay(v))return false;const r=remote[k];return !r||r.v==null||isEmptyDay(r.v);});
-      if(pub.length)pushKeys(pub);
-      return;
+      saveMtimes(mt);
+    } finally {
+      applyingRemote=false;   // 예외가 나도 항상 해제 -> 내 편집이 업로드 차단되지 않게
     }
-
-    for(const key in remote){
-      const r=remote[key];const tm=r.t||0;
-      if(r.w===me){if((mt[key]||0)<tm)mt[key]=tm;continue;} // 내 변경의 에코
-      if(tm>(mt[key]||0)){
-        if(r.v==null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);
-        mt[key]=tm;changed=true;
-      }
-    }
-    saveMtimes(mt);applyingRemote=false;
     if(changed&&window.renderAll)window.renderAll();
+    setStatus('connected','Synced');
+    if(pub&&pub.length)pushKeys(pub);
   }
 
   function connect(code){
