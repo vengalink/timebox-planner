@@ -657,7 +657,7 @@ if('serviceWorker' in navigator){
     messagingSenderId: "9411153118",
     appId: "1:9411153118:web:59737428a199c9122bc64f"
   };
-  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2', SYNC_VER='v21';
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_', WID_KEY='tbp_writer', SV_KEY='tbp_sync_v', SV='2', SYNC_VER='v22';
   const origSet=localStorage.setItem.bind(localStorage);
   const origRemove=localStorage.removeItem.bind(localStorage);
   let fb=null, docRef=null, unsub=null, applyingRemote=false, firstSnap=true;
@@ -682,10 +682,10 @@ if('serviceWorker' in navigator){
   function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,500);}
   function flushPush(){pushTimer=null;if(pending.size===0)return;const keys=[...pending];pending.clear();pushKeys(keys);}
   function pushKeys(keys){
-    if(!fb||!docRef)return;
+    if(!fb||!docRef)return null;
     const items={};const w=writerId();
     keys.forEach(k=>{const v=localStorage.getItem(k);items[k]={v:v===null?null:v,t:fb.serverTimestamp(),w:w};});
-    fb.setDoc(docRef,{items},{merge:true}).catch(e=>console.warn('[sync] push',e));
+    return fb.setDoc(docRef,{items},{merge:true}).catch(e=>{console.warn('[sync] push',e);throw e;});
   }
 
   function setStatus(state,msg){
@@ -760,8 +760,10 @@ if('serviceWorker' in navigator){
     if(!fb||!docRef){if(btn){btn.textContent='Not connected';setTimeout(()=>btn.textContent=o,1800);}return;}
     const keys=tbpKeys().filter(k=>{const v=localStorage.getItem(k);return v!=null&&!isEmptyDay(v);});
     if(!keys.length){if(btn){btn.textContent='No entries to upload';setTimeout(()=>btn.textContent=o,1800);}return;}
-    pushKeys(keys);
-    if(btn){btn.textContent='Uploaded '+keys.length+' day(s) ✓';setTimeout(()=>btn.textContent=o,2000);}
+    if(btn)btn.textContent='Uploading…';
+    const p=pushKeys(keys);
+    if(p)p.then(()=>{if(btn){btn.textContent='Uploaded '+keys.length+' day(s) ✓';setTimeout(()=>btn.textContent=o,2500);}})
+         .catch(()=>{if(btn){btn.textContent='Upload failed — check connection';setTimeout(()=>btn.textContent=o,3000);}});
   };
   window.closeSync=function(){document.getElementById('sync-overlay').classList.remove('show');};
   window.copySyncCode=function(){
@@ -784,7 +786,9 @@ if('serviceWorker' in navigator){
       const A=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
       const F=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
       const app=A.initializeApp(firebaseConfig);
-      const db=F.getFirestore(app);
+      let db;
+      try{ db=F.initializeFirestore(app,{experimentalForceLongPolling:true}); } // iOS/네트워크 전송 멈춤 회피
+      catch(e){ db=F.getFirestore(app); }
       fb={db,doc:F.doc,onSnapshot:F.onSnapshot,setDoc:F.setDoc,serverTimestamp:F.serverTimestamp};
       connect(getCode());
     }catch(e){console.warn('[sync] firebase init failed',e);setStatus('error','Offline');}
