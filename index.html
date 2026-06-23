@@ -30,6 +30,10 @@
     padding:calc(var(--safe-top) + 10px) 16px 10px;display:flex;align-items:center;justify-content:space-between;}
   .header-title{color:#fff;font-size:15px;font-weight:700;}
   .header-date{color:#aaa;font-size:12px;}
+  .header-right{display:flex;align-items:center;gap:8px;}
+  .sync-btn{background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:8px;
+    padding:4px 8px;font-size:14px;line-height:1;cursor:pointer;}
+  .sync-btn.ok{color:#7ecfa0;} .sync-btn.err{color:#f3a39a;} .sync-btn.wait{color:#f7df6e;}
 
   /* 날짜 바 */
   .date-bar{flex-shrink:0;z-index:40;background:#fff;border-bottom:1px solid var(--border);
@@ -165,6 +169,24 @@
   .cat-btn:active{background:var(--accent);color:#fff;}
   .cat-cancel{width:100%;margin-top:10px;padding:12px;border:none;border-radius:12px;
     font-size:13px;color:#888;background:#f0ede8;cursor:pointer;}
+  /* 기기 동기화 모달 */
+  .sync-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:200;
+    align-items:center;justify-content:center;padding:20px;}
+  .sync-overlay.show{display:flex;}
+  .sync-sheet{background:#faf8f4;border-radius:16px;padding:20px;width:100%;max-width:360px;
+    box-shadow:0 10px 40px rgba(0,0,0,.3);}
+  .sync-status{font-size:12px;text-align:center;margin-bottom:14px;color:#888;}
+  .sync-status .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;
+    vertical-align:middle;background:#888;}
+  .sync-status.ok .dot{background:#7ecfa0;} .sync-status.err .dot{background:#e05a4f;}
+  .sync-status.wait .dot{background:#f7df6e;}
+  .sync-label{display:block;font-size:11px;font-weight:700;color:var(--accent);margin:12px 0 6px;}
+  .sync-row{display:flex;gap:8px;}
+  .sync-input{flex:1;min-width:0;padding:10px;border:1.5px solid var(--border);border-radius:10px;
+    font-size:12px;background:#fff;color:var(--accent);font-family:monospace;}
+  .sync-act{padding:10px 14px;border:none;border-radius:10px;background:var(--accent);color:#fff;
+    font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .sync-hint{font-size:11px;color:#999;margin-top:10px;line-height:1.55;}
 </style>
 </head>
 <body>
@@ -173,7 +195,10 @@
 
 <div class="header" id="header">
   <div class="header-title">📅 Timebox Planner</div>
-  <div class="header-date" id="hdr-date"></div>
+  <div class="header-right">
+    <span class="header-date" id="hdr-date"></span>
+    <button class="sync-btn" id="sync-btn" title="Device sync" onclick="openSync()">⟳</button>
+  </div>
 </div>
 
 <div class="date-bar" id="date-bar">
@@ -243,6 +268,29 @@
       <button class="cat-btn" onclick="confirmDemote('BUSINESS')">BUSINESS</button>
     </div>
     <button class="cat-cancel" onclick="closeCatSheet()">Cancel</button>
+  </div>
+</div>
+
+<!-- 기기 동기화 -->
+<div class="sync-overlay" id="sync-overlay" onclick="if(event.target===this)closeSync()">
+  <div class="sync-sheet">
+    <div class="cat-title">Sync across devices</div>
+    <div class="sync-status wait" id="sync-status"><span class="dot"></span>Connecting…</div>
+
+    <label class="sync-label">This device's sync code</label>
+    <div class="sync-row">
+      <input class="sync-input" id="sync-code-view" readonly>
+      <button class="sync-act" id="sync-copy-btn" onclick="copySyncCode()">Copy</button>
+    </div>
+    <div class="sync-hint">On your other device, open this panel, paste this code below, and tap Connect. Both devices then stay in sync automatically.</div>
+
+    <label class="sync-label">Link a code from another device</label>
+    <div class="sync-row">
+      <input class="sync-input" id="sync-code-input" placeholder="Paste code…" autocapitalize="off" autocomplete="off" spellcheck="false">
+      <button class="sync-act" onclick="connectSyncCode()">Connect</button>
+    </div>
+
+    <button class="cat-cancel" onclick="closeSync()">Close</button>
   </div>
 </div>
 
@@ -590,6 +638,105 @@ if('serviceWorker' in navigator){
     });
   });
 }
+</script>
+
+<!-- ====== Firebase cloud sync (iPhone <-> PC) ====== -->
+<script type="module">
+(function(){
+  const firebaseConfig = {
+    apiKey: "AIzaSyCE_deSviVmhL1nw9cpAv6wvdESQ1AX3VA",
+    authDomain: "timebox-ac6b4.firebaseapp.com",
+    projectId: "timebox-ac6b4",
+    storageBucket: "timebox-ac6b4.firebasestorage.app",
+    messagingSenderId: "9411153118",
+    appId: "1:9411153118:web:59737428a199c9122bc64f"
+  };
+  const CODE_KEY='tbp_sync_code', MT_KEY='tbp_mtimes', PFX='tbp6_';
+  const origSet=localStorage.setItem.bind(localStorage);
+  const origRemove=localStorage.removeItem.bind(localStorage);
+  let fb=null, docRef=null, unsub=null, applyingRemote=false;
+  const pending=new Set(); let pushTimer=null;
+
+  function genCode(){const a=new Uint8Array(12);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
+  function getCode(){let c=localStorage.getItem(CODE_KEY);if(!c){c=genCode();origSet(CODE_KEY,c);}return c;}
+  function mtimes(){try{return JSON.parse(localStorage.getItem(MT_KEY))||{};}catch(e){return {};}}
+  function saveMtimes(o){origSet(MT_KEY,JSON.stringify(o));}
+  function tbpKeys(){const r=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(PFX))r.push(k);}return r;}
+
+  // 로컬 편집 감지 (기존 save()가 호출하는 setItem을 가로챔)
+  localStorage.setItem=function(k,v){origSet(k,v);if(!applyingRemote&&k.startsWith(PFX)){const mt=mtimes();mt[k]=Date.now();saveMtimes(mt);schedulePush(k);}};
+  localStorage.removeItem=function(k){origRemove(k);if(!applyingRemote&&k.startsWith(PFX)){const mt=mtimes();mt[k]=Date.now();saveMtimes(mt);schedulePush(k);}};
+
+  function schedulePush(k){pending.add(k);if(pushTimer)clearTimeout(pushTimer);pushTimer=setTimeout(flushPush,600);}
+  function flushPush(){pushTimer=null;if(!fb||!docRef){pending.clear();return;}const mt=mtimes();const items={};pending.forEach(k=>{const v=localStorage.getItem(k);items[k]={v:v===null?null:v,t:mt[k]||Date.now()};});pending.clear();fb.setDoc(docRef,{items},{merge:true}).catch(e=>console.warn('[sync] push',e));}
+
+  function setStatus(state,msg){
+    const cls=state==='connected'?'ok':state==='error'?'err':'wait';
+    const el=document.getElementById('sync-status');
+    const btn=document.getElementById('sync-btn');
+    if(el){el.className='sync-status '+cls;el.innerHTML='<span class="dot"></span>'+(msg||state);}
+    if(btn){btn.className='sync-btn '+cls;}
+  }
+
+  function handleRemote(snap){
+    const remote=(snap.exists()?(snap.data().items||{}):{});
+    const mt=mtimes();let changed=false;applyingRemote=true;
+    for(const key of Object.keys(remote)){const r=remote[key];if(!r)continue;const rt=r.t||0;const lt=mt[key]||0;if(rt>lt){if(r.v===null)localStorage.removeItem(key);else localStorage.setItem(key,r.v);mt[key]=rt;changed=true;}}
+    saveMtimes(mt);applyingRemote=false;
+    if(changed&&window.renderAll)window.renderAll();
+    setStatus('connected','Synced');
+    pushLocalNewer(remote);
+  }
+  function pushLocalNewer(remote){
+    const mt=mtimes();const items={};let n=0;
+    for(const key of tbpKeys()){let lt=mt[key];if(lt===undefined){lt=Date.now();mt[key]=lt;}const rt=(remote[key]&&remote[key].t)||0;if(lt>rt){items[key]={v:localStorage.getItem(key),t:lt};n++;}}
+    saveMtimes(mt);
+    if(n>0&&fb&&docRef)fb.setDoc(docRef,{items},{merge:true}).catch(e=>console.warn('[sync] seed',e));
+  }
+
+  function connect(code){
+    if(!fb)return;
+    if(unsub){unsub();unsub=null;}
+    localStorage.setItem(CODE_KEY,code); // tbp6_ 아님 -> push 트리거 안 됨
+    docRef=fb.doc(fb.db,'spaces',code);
+    setStatus('wait','Connecting…');
+    unsub=fb.onSnapshot(docRef,handleRemote,err=>{console.warn('[sync]',err);setStatus('error','Offline');});
+  }
+
+  // ---- UI (전역 노출) ----
+  window.openSync=function(){
+    const ov=document.getElementById('sync-overlay');
+    document.getElementById('sync-code-view').value=getCode();
+    document.getElementById('sync-code-input').value='';
+    ov.classList.add('show');
+  };
+  window.closeSync=function(){document.getElementById('sync-overlay').classList.remove('show');};
+  window.copySyncCode=function(){
+    const c=getCode();const btn=document.getElementById('sync-copy-btn');
+    const ok=()=>{if(btn){const o=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=o,1200);}};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(c).then(ok).catch(()=>{const inp=document.getElementById('sync-code-view');inp.select();document.execCommand('copy');ok();});}
+    else{const inp=document.getElementById('sync-code-view');inp.select();document.execCommand('copy');ok();}
+  };
+  window.connectSyncCode=function(){
+    const v=(document.getElementById('sync-code-input').value||'').trim();
+    if(!v){return;}
+    connect(v);
+    document.getElementById('sync-code-view').value=v;
+    document.getElementById('sync-code-input').value='';
+  };
+
+  // ---- Firebase 초기화 ----
+  (async()=>{
+    try{
+      const A=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const F=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const app=A.initializeApp(firebaseConfig);
+      const db=F.getFirestore(app);
+      fb={db,doc:F.doc,onSnapshot:F.onSnapshot,setDoc:F.setDoc,getDoc:F.getDoc};
+      connect(getCode());
+    }catch(e){console.warn('[sync] firebase init failed',e);setStatus('error','Offline');}
+  })();
+})();
 </script>
 </body>
 </html>
